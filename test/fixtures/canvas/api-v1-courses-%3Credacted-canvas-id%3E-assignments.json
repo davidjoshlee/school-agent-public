@@ -1,0 +1,27 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/courses/101/assignments",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": [
+    {
+      "id": 201,
+      "name": "Example analysis",
+      "description": "<p>Compare the two fictional strategies.</p>",
+      "due_at": "2026-09-28T12:00:00Z",
+      "all_dates": [
+        {
+          "due_at": "2026-09-28T12:00:00Z",
+          "base": true
+        }
+      ],
+      "rubric": [
+        {
+          "id": "analysis",
+          "points": 5
+        }
+      ]
+    }
+  ]
+}

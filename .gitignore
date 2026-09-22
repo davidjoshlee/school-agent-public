@@ -1,0 +1,29 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.tgz
+*.db
+*.db-shm
+*.db-wal
+*-submission.txt
+vault
+.agent-runs
+.DS_Store
+*.log
+
+# User-specific local config (paths, pilot course) — never commit.
+school.config.json
+.claude/worktrees
+
+# Gate evidence bundles are reproducible build artifacts that contain REAL
+# coursework data (names, grades, instructor comments, Canvas verifier tokens).
+# They stay local — never committed, regardless of repo visibility.
+docs/evidence/
+
+# Local-only evals that read real synced coursework — never committed.
+eval/real/
+
+# Scratch specs/notes for in-flight work — not part of the repo.
+.scratch/

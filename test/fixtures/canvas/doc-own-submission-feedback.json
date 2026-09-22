@@ -1,0 +1,15 @@
+{
+  "url": "https://canvas.example.test/api/v1/courses/course-completed/assignments/assignment-flexible/submissions/self",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": {
+    "id": "submission-self",
+    "assignment_id": "assignment-flexible",
+    "submission_history": [{ "submission_type": "online_text_entry" }],
+    "rubric_assessment": {
+      "criterion_1": { "points": 5, "comments": "Clear reasoning" }
+    },
+    "submission_comments": [{ "author_id": "instructor", "comment": "Strong analysis" }],
+    "attachments": [{ "id": "file-reflection", "display_name": "reflection.pdf" }]
+  }
+}

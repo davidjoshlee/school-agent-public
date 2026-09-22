@@ -1,0 +1,1 @@
+Synthetic PPTX ground truth

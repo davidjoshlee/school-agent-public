@@ -1,0 +1,9 @@
+{
+  "models": {
+    "triage": "openai/gpt-4.1-mini",
+    "generation": "anthropic/claude-3-7-sonnet",
+    "functions": {
+      "extractSummary": "unavailable-model"
+    }
+  }
+}

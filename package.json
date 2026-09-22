@@ -1,0 +1,59 @@
+{
+  "name": "school-agent",
+  "version": "0.0.0",
+  "description": "Local-first command-line agent for reading Canvas course material into a Markdown vault.",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidjoshlee/school-agent-public.git"
+  },
+  "bugs": {
+    "url": "https://github.com/davidjoshlee/school-agent-public/issues"
+  },
+  "homepage": "https://github.com/davidjoshlee/school-agent-public#readme",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "school": "bin/school.js",
+    "school-agent": "bin/school.js"
+  },
+  "files": [
+    "bin/*.js",
+    "config/*.json",
+    "dist/**/*.js",
+    "src/**/*.ts",
+    "!src/**/README.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "node scripts/build.mjs",
+    "package:smoke": "npm run build && node scripts/package-smoke.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "ai": "^7.0.78",
+    "better-sqlite3": "^13.0.3",
+    "commander": "^14.0.0",
+    "gray-matter": "^4.0.3",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.1",
+    "pdfjs-dist": "^4.10.38",
+    "turndown": "^7.2.4",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
+    "@types/node": "^24.13.3",
+    "msw": "^2.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

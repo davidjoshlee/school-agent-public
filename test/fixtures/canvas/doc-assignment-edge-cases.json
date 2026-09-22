@@ -1,0 +1,14 @@
+{
+  "url": "https://canvas.example.test/api/v1/courses/course-completed/assignments",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": [
+    {
+      "id": "assignment-flexible",
+      "name": "No fixed deadline",
+      "due_at": null,
+      "has_overrides": true,
+      "canvas_future_field": { "preserved": true }
+    }
+  ]
+}

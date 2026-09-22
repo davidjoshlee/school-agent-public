@@ -1,0 +1,14 @@
+{
+  "models": {
+    "triage": "deepseek/deepseek-v4-flash-vision-exp",
+    "generation": "google/gemini-3.7-flash",
+    "functions": {
+      "extractSummary": "deepseek/deepseek-v4-flash-vision-exp",
+      "prepBrief": "google/gemini-3.7-flash",
+      "assignmentDraft": "google/gemini-3.7-flash",
+      "assignmentDiscuss": "deepseek/deepseek-v4-flash-vision-exp",
+      "coverageCompare": "deepseek/deepseek-v4-flash-vision-exp",
+      "playbookUpdate": "deepseek/deepseek-v4-flash-vision-exp"
+    }
+  }
+}

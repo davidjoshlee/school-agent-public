@@ -1,0 +1,31 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/courses/101/assignments/201/submissions/self",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "id": 701,
+    "assignment_id": 201,
+    "workflow_state": "graded",
+    "score": 4,
+    "submitted_at": "2026-09-27T12:00:00Z",
+    "submission_history": [
+      {
+        "id": 701,
+        "body": "Synthetic response."
+      }
+    ],
+    "submission_comments": [
+      {
+        "id": 801,
+        "comment": "Synthetic feedback."
+      }
+    ],
+    "rubric_assessment": {
+      "analysis": {
+        "points": 4
+      }
+    }
+  }
+}

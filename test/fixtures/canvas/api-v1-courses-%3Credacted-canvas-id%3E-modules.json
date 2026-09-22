@@ -1,0 +1,31 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/courses/101/modules",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": [
+    {
+      "id": 301,
+      "name": "Session 1 - September 21",
+      "position": 1,
+      "unlock_at": null,
+      "items": [
+        {
+          "id": 401,
+          "title": "Example analysis",
+          "type": "Assignment",
+          "content_id": 201,
+          "position": 1
+        },
+        {
+          "id": 402,
+          "title": "Reading",
+          "type": "Page",
+          "page_url": "reading",
+          "position": 2
+        }
+      ]
+    }
+  ]
+}

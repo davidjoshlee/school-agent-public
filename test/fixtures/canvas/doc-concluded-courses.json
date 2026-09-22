@@ -1,0 +1,14 @@
+{
+  "url": "https://canvas.example.test/api/v1/courses?enrollment_state=completed&state%5B%5D=completed",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": [
+    {
+      "id": "course-completed",
+      "name": "Completed course",
+      "course_code": "ARCHIVE-101",
+      "concluded": true,
+      "workflow_state": "completed"
+    }
+  ]
+}

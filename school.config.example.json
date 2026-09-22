@@ -1,0 +1,20 @@
+{
+  "canvas": {
+    "baseUrl": "https://canvas.example.edu"
+  },
+  "vault": {
+    "path": "~/school-vault",
+    "gitInit": false
+  },
+  "index": {
+    "path": "~/.local/share/school-agent/index.db"
+  },
+  "courses": {
+    "mode": "list",
+    "allowlist": []
+  },
+  "cost": {
+    "maxMonthlySpendUSD": 15
+  },
+  "restrictedFileHandling": "exclude"
+}

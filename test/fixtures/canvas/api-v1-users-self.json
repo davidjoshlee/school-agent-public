@@ -1,0 +1,13 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/users/self",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "id": 1,
+    "name": "Example Student",
+    "email": "student@example.invalid",
+    "login_id": "example-student"
+  }
+}

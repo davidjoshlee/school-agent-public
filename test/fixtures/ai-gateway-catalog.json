@@ -1,0 +1,6 @@
+{
+  "models": [
+    { "id": "deepseek/deepseek-v4-flash-vision-exp", "promptCaching": false },
+    { "id": "google/gemini-3.7-flash", "promptCaching": false }
+  ]
+}

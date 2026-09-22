@@ -1,0 +1,11 @@
+{
+  "url": "https://canvas.example.test/api/v1/courses/course-completed/pages/week-one?include%5B%5D=body",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": {
+    "page_id": "page-week-one",
+    "url": "week-one",
+    "title": "Week one",
+    "body": "<p>Module-referenced page</p>"
+  }
+}

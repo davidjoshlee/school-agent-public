@@ -1,0 +1,15 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/announcements",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": [
+    {
+      "id": 501,
+      "title": "Example reminder",
+      "message": "<p>Read chapter one before class.</p>",
+      "posted_at": "2026-09-01T12:00:00Z"
+    }
+  ]
+}

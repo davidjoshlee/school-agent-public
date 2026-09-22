@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem using synthetic data only.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include tokens, .env files, configuration containing personal paths, Canvas URLs for real courses, or course material.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "0.0.0 or abc1234"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Use synthetic names and URLs such as https://canvas.example.edu.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

@@ -1,0 +1,28 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/courses",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": [
+    {
+      "id": 101,
+      "name": "Example Strategy",
+      "course_code": "EXAMPLE-101",
+      "workflow_state": "available",
+      "enrollments": [
+        {
+          "enrollment_state": "active",
+          "type": "student"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Example concluded course",
+      "course_code": "EXAMPLE-102",
+      "concluded": true,
+      "workflow_state": "completed"
+    }
+  ]
+}

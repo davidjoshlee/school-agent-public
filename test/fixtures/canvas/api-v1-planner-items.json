@@ -1,0 +1,17 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/planner/items",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": [
+    {
+      "plannable_id": 201,
+      "plannable_type": "assignment",
+      "plannable": {
+        "id": 201,
+        "title": "Example analysis"
+      }
+    }
+  ]
+}

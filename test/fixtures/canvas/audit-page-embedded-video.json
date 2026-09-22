@@ -1,0 +1,11 @@
+{
+  "url": "https://canvas.test/api/v1/courses/10/pages/video-page?include[]=body",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": {
+    "page_id": "14",
+    "url": "video-page",
+    "title": "Video page",
+    "body": "<iframe src=\"https://video.test/watch\"></iframe>"
+  }
+}

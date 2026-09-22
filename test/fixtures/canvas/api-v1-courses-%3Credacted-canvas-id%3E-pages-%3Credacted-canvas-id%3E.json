@@ -1,0 +1,13 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/courses/101/pages/reading",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "page_id": 501,
+    "url": "reading",
+    "title": "Example reading",
+    "body": "<p>Fictional course reading for tests.</p>"
+  }
+}

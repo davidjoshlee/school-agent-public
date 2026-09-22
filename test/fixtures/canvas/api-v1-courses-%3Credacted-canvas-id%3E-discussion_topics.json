@@ -1,0 +1,14 @@
+{
+  "url": "https://canvas.example.invalid/api/v1/courses/101/discussion_topics",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": [
+    {
+      "id": 901,
+      "title": "Example discussion prompt",
+      "message": "<p>Which fictional strategy would you choose?</p>"
+    }
+  ]
+}

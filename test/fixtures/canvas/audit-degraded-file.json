@@ -1,0 +1,15 @@
+{
+  "url": "https://canvas.test/api/v1/courses/10/files",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": [
+    {
+      "id": "50",
+      "display_name": "lecture.bin",
+      "url": "https://canvas.test/files/50",
+      "size": 4,
+      "updated_at": "2026-09-01T00:00:00Z",
+      "content_type": "application/octet-stream"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "url": "https://canvas.test/api/v1/courses?enrollment_state=completed",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": [
+    { "id": "10", "name": "Concluded Strategy", "course_code": "STRAT-10", "concluded": true }
+  ]
+}

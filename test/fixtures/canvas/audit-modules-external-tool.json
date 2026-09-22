@@ -1,0 +1,16 @@
+{
+  "url": "https://canvas.test/api/v1/courses/10/modules?include[]=items",
+  "status": 200,
+  "headers": { "content-type": "application/json" },
+  "body": [
+    {
+      "id": "11",
+      "name": "Week 1",
+      "position": 1,
+      "items": [
+        { "id": "12", "title": "Simulation", "type": "ExternalTool", "content_id": "99" },
+        { "id": "13", "title": "Video page", "type": "Page", "page_url": "video-page" }
+      ]
+    }
+  ]
+}
