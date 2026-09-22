@@ -1,6 +1,6 @@
 # Public release checklist
 
-This checklist tracks the clean-history public source release. Private development history and local course content are excluded.
+This checklist tracks the clean-history public source release ([tracking issue #6](https://github.com/davidjoshlee/school-agent-public/issues/6)). Private development history and local course content are excluded.
 
 ## Completed in the public export
 
@@ -19,7 +19,7 @@ This checklist tracks the clean-history public source release. Private developme
 - [x] Confirm the public history is clean and contains only the audited export.
 - [x] Review the generated package file list before publishing or attaching an archive.
 - [ ] Activate the Linux/macOS CI workflow ([issue #1](https://github.com/davidjoshlee/school-agent-public/issues/1)). GitHub rejected workflow creation because the authenticated token lacks `workflow` scope. The inert [workflow template](ci-workflow.example.yml) is ready for a maintainer with that permission to install.
-- [ ] Verify the public clone and onboarding instructions from a fresh macOS or Linux environment with Node.js 22 or newer.
+- [x] Verify an anonymous public clone, fresh dependency installation, build, and packaged setup/doctor workflow on macOS with Node.js 24. Linux and Node.js 22 matrix verification remain pending CI activation.
 
 ## Acceptance after publication
 
