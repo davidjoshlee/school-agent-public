@@ -112,12 +112,14 @@ hashes, or change Canvas IDs.
 - Synced course content is agent-owned and can be rewritten by a later sync.
 - User-owned documents (`source: user`) and pending documents (`status: draft`)
   are never overwritten.
-- A migration destination is always created exclusively. If any destination
-  already exists, the action is reported as a conflict and the layout marker
-  remains v1 so the user can resolve it and resume safely.
+- A migration destination is created exclusively. An existing destination with
+  identical bytes is skipped; differing content is a conflict. The layout
+  marker remains v1 when a conflict blocks migration.
 - The planner records source and destination paths plus a source digest. The
   executor checks the digest again immediately before moving. Moves use an
-  exclusive same-filesystem operation and can be resumed after interruption.
+  exclusive same-filesystem operation. After an interruption, inspect the new
+  dry-run plan and resolve conflicts manually before retrying; automatic
+  recovery is not guaranteed.
 - A dry run makes no directories, moves no files, and never touches the real
   vault. Tests use temporary directories only.
 - Ambiguous or undated content is preserved and placed in class-level
