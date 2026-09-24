@@ -18,8 +18,9 @@ This checklist tracks the clean-history public source release ([tracking issue #
 - [x] Perform a final repository and package audit for credentials, signed URLs, personal identifiers, local paths, and course material. Report findings by path only; do not copy sensitive values into issues or logs.
 - [x] Confirm the public history is clean and contains only the audited export.
 - [x] Review the generated package file list before publishing or attaching an archive.
-- [ ] Confirm the pushed Linux/macOS CI workflow ([issue #1](https://github.com/davidjoshlee/school-agent-public/issues/1)) passes all four Node.js 22/24 matrix jobs.
-- [ ] After changing repository visibility, verify an anonymous public clone, fresh dependency installation, build, and packaged setup/doctor workflow. Local package smoke has passed on macOS with Node.js 24; public-clone access cannot be verified while the repository is private.
+- [x] Confirm the pushed Linux/macOS CI workflow ([issue #1](https://github.com/davidjoshlee/school-agent-public/issues/1)) passes all four Node.js 22/24 matrix jobs, both on the pull request and merged `main`.
+- [x] After changing repository visibility, verify an anonymous public clone, fresh dependency installation, build, and packaged setup/doctor workflow on macOS with Node.js 24.
+- [x] Audit installed production dependencies and update the lockfile to a patched `js-yaml` release; `npm audit --omit=dev` reports zero advisories. The development-only Vitest advisories are tracked in [issue #8](https://github.com/davidjoshlee/school-agent-public/issues/8).
 
 ## Acceptance after publication
 
