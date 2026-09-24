@@ -50,7 +50,7 @@ describe("School Agent plugin package", () => {
 
     expect(portable.$schema).toBe("https://agent-plugins.org/schemas/1.0.0/plugin.schema.json")
     expect(portable.name).toBe("school-agent")
-    expect(portable.version).toBe("0.2.0")
+    expect(portable.version).toBe("0.2.1")
     expect(portable.name).toBe(codex.name)
     expect(portable.version).toBe(codex.version)
     expect(portable.description).toBe(codex.description)

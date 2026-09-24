@@ -23,8 +23,8 @@ Use the [School Agent product map](../../school-agent.md) for broader context. C
 ## Review the brief
 
 - Confirm the brief is finished preparation grounded in supplied readings and course sources, with usable source links; it should explain the material rather than merely tell the student what to read.
-- Identify every prep question, prompt, or numbered item in the relevant synced module/assignment instructions. Match each to an answer in the brief, question by question. Ensure each answer addresses the whole question and is supported by available source material.
-- The CLI's content check requires a nonempty answer subsection for each detected deliverable item. That check cannot establish relevance, correctness, completeness, or source support. If a question is missed, an answer is unsupported, or material is unavailable, report the gap explicitly. Do not invent facts or fill gaps with plausible-sounding answers.
+- Identify every prep question, prompt, or numbered item in the relevant synced module/assignment instructions. For each one, record whether the brief gives a substantive answer and which source supports it. A copied question, heading, generic checklist item, or nonempty filler body is **not** an answer. Mark each item answered, partially answered, unsupported, or missing; do not declare the brief complete while any item is partial, unsupported, or missing.
+- The CLI's content check requires a nonempty answer subsection for each detected deliverable item. That check cannot establish relevance, correctness, completeness, or source support, and detection may miss a question. If a question is missed, an answer is unsupported, or material is unavailable, report the gap explicitly. Do not invent facts or fill gaps with plausible-sounding answers.
 - Check citations resolve to the supplied vault context. Treat generation provenance as a review aid, not a correctness guarantee.
 - Follow the applicable course AI policy. Stored policy metadata is informational and is not permission to use generated material.
 
