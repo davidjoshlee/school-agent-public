@@ -147,7 +147,7 @@ describe("simulation ground-truth comparison", () => {
       // Then: coverage—not similarity to the final submission—is reported for every criterion.
       const comparison = await readFile(result.comparisonPath, "utf8")
       const scorecard = await readFile(result.scorecardPath, "utf8")
-      expect(comparison).toMatch(/\| market analysis \| hit \|/)
+      expect(comparison).toMatch(/\| modules\/market-analysis\.md \| hit \|/)
       expect(comparison).toMatch(/\| evidence \| missed-but-flagged \|/)
       expect(comparison).toContain("competitor-data.md")
       expect(comparison).toContain("not similarity-to-final")

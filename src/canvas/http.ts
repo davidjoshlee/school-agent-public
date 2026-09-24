@@ -77,8 +77,10 @@ export class CanvasTokenUnavailableError extends Error {
   readonly name = "CanvasTokenUnavailableError"
   readonly code = "CANVAS_TOKEN_UNAVAILABLE"
 
-  constructor() {
-    super("Canvas token is unavailable")
+  constructor(tokenEnv = "CANVAS_TOKEN") {
+    super(
+      `Canvas token is unavailable. Set ${tokenEnv} or follow docs/auth-runbook.md to configure Canvas authentication.`,
+    )
   }
 }
 
@@ -146,7 +148,7 @@ export class CanvasHttpClient {
     this.#baseUrl = new URL(options.baseUrl)
     const resolution = resolveCanvasToken(options.tokenEnv, options.environment)
     if (resolution.kind === "missing") {
-      throw new CanvasTokenUnavailableError()
+      throw new CanvasTokenUnavailableError(options.tokenEnv)
     }
     this.#token = resolution.token
     this.#sleep = options.sleep ?? defaultSleep

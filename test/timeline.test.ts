@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest"
 import {
   buildTimeline,
   crossCheckIcs,
+  notifyWithOsascript,
   renderTimeline,
   writeDueSoonReminders,
 } from "../src/engines/timeline.js"
@@ -70,6 +71,15 @@ function populatedIndex() {
 }
 
 describe("timeline engine", () => {
+  it.skipIf(process.platform === "darwin")(
+    "skips the macOS notifier on other platforms",
+    async () => {
+      await expect(
+        notifyWithOsascript("School agent", "fixture notification"),
+      ).resolves.toBeUndefined()
+    },
+  )
+
   it("orders multiple courses by effective due date and flags announcements for action", () => {
     // Given: assignments across courses with a personal due-date override and an announcement.
     const index = populatedIndex()

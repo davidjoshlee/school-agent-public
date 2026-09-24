@@ -92,7 +92,7 @@ describe("pilot onboarding", () => {
       "Lead with the evidence.",
     )
     await expect(readFile(course.playbook, "utf8")).resolves.toContain("Lead with the evidence.")
-    await expect(readFile(join(course.guidance, "readme.md"), "utf8")).resolves.toContain(
+    await expect(readFile(join(course.guidance, "README.md"), "utf8")).resolves.toContain(
       "Guidance",
     )
     expect(configuration.courses.pilotCourseId).toBe("10")
