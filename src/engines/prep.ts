@@ -5,13 +5,13 @@ import type { SchoolConfig } from "../config/index.js"
 import { assertUnderSpendCap, recordModelUsage } from "../models/cost.js"
 import { modelMappings } from "../models/index.js"
 import type { SchoolIndex } from "../store/db.js"
-import { coursePaths, vaultDocumentKinds } from "../store/paths.js"
+import { type CoursePeriodRequest, coursePaths, vaultDocumentKinds } from "../store/paths.js"
 import { VaultWriter } from "../store/vault.js"
 import { vaultSources, vaultStatuses } from "../store/vault-document.js"
 import { type DeliverableItem, deliverableFraming, formatDeliverableItems } from "./deliverable.js"
 import { type ArtifactRequirements, resolveRequirements } from "./requirements.js"
 import { assembleCourseContext, estimateTokens, type TriageFunction } from "./retrieve.js"
-import { selectModulesForPeriod } from "./retrieve-selection.js"
+import { type ModuleSelection, selectModulesForPeriod } from "./retrieve-selection.js"
 
 // allow: SIZE_OK — the prep-brief engine owns the whole auto-delivered-brief
 // pipeline (context assembly, structure resolution, prompt, fabrication guard,
@@ -145,6 +145,7 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
   validateBrief(content, new Set(context.sources.map((source) => source.path)), requirements)
 
   const runId = randomUUID()
+  const placement = prepPeriodPlacement(selection)
   const result = await new VaultWriter({
     root: input.vaultRoot,
     gitInit: input.config.vault.gitInit,
@@ -159,6 +160,7 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
     source: vaultSources.agent,
     status: vaultStatuses.autoFinal,
     model,
+    ...(placement === undefined ? {} : { period: placement }),
   })
   recordModelUsage({
     index: input.index,
@@ -171,6 +173,24 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
     fallbackOutputTokens: estimateTokens(generated.text),
   })
   return { path: result.path, period: { kind: period.kind, value: period.value }, model }
+}
+
+/** Place generated prep beside the module week/milestone selected for its context. */
+export function prepPeriodPlacement(selection: ModuleSelection): CoursePeriodRequest | undefined {
+  if (selection.mode !== "module") return undefined
+  for (const path of selection.paths) {
+    const directory = path.split("/")[0] ?? ""
+    const match = /^(Week|Milestone)\s+(\d+)(?:\s+-\s+(.+))?$/i.exec(directory)
+    const number = match?.[2] === undefined ? Number.NaN : Number.parseInt(match[2], 10)
+    if (!Number.isInteger(number) || number < 1) continue
+    const label = match?.[3]?.trim()
+    return {
+      kind: match?.[1]?.toLowerCase() === "milestone" ? "milestone" : "week",
+      number,
+      ...(label === undefined || label.length === 0 ? {} : { title: label }),
+    }
+  }
+  return undefined
 }
 
 type ResolvedPeriod = PrepPeriod & { readonly note: string }

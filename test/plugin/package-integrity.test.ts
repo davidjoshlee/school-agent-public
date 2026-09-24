@@ -50,7 +50,7 @@ describe("School Agent plugin package", () => {
 
     expect(portable.$schema).toBe("https://agent-plugins.org/schemas/1.0.0/plugin.schema.json")
     expect(portable.name).toBe("school-agent")
-    expect(portable.version).toBe("0.2.1")
+    expect(portable.version).toBe("0.3.0")
     expect(portable.name).toBe(codex.name)
     expect(portable.version).toBe(codex.version)
     expect(portable.description).toBe(codex.description)
@@ -107,6 +107,8 @@ describe("School Agent plugin package", () => {
     }
     expect(doc).toContain("codex plugin marketplace add .")
     expect(doc).toContain("codex plugin add school-agent@personal")
+    expect(doc).toContain("0.3.0")
+    expect(doc).toContain("codex plugin remove school-agent@personal")
   })
 
   it("keeps the package skills-only and free of credential-shaped or live Canvas data", async () => {

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises"
-import { join, relative } from "node:path"
+import { relative, sep } from "node:path"
 
-import { slugify, vaultLayout } from "../store/paths.js"
+import { slugify, vaultDocumentKinds, vaultLayout } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault.js"
 import { buildPathIndex, listMarkdownFiles, type PathIndex } from "./retrieve-module-index.js"
 
@@ -41,8 +41,7 @@ export type CourseModule = {
 const itemLine = /^- ([A-Za-z]+):\s*(.+?)(?:\s*\((canvas_id|page_url):\s*(\S+)\))?\s*$/
 
 export async function loadCourseModules(courseRoot: string): Promise<readonly CourseModule[]> {
-  const modulesRoot = join(courseRoot, vaultLayout.modules)
-  const files = await listMarkdownFiles(modulesRoot)
+  const files = await listMarkdownFiles(courseRoot)
   const index = await buildPathIndex(courseRoot)
   const modules: CourseModule[] = []
   for (const file of files) {
@@ -53,6 +52,7 @@ export async function loadCourseModules(courseRoot: string): Promise<readonly Co
     } catch {
       continue
     }
+    if (!looksLikeModuleDocument(courseRoot, file, parsed.frontmatter.type)) continue
     const root = parseModuleRoot(parsed.content)
     if (root === null) continue
     modules.push({
@@ -102,9 +102,18 @@ function parseModuleRoot(
 }
 
 function positionFromDirectory(courseRoot: string, file: string): number {
-  const rel = relative(join(courseRoot, vaultLayout.modules), file)
-  const match = /^(\d+)-/.exec(rel)
-  return match?.[1] === undefined ? 0 : Number.parseInt(match[1], 10)
+  const rel = relative(courseRoot, file).split(sep).join("/")
+  const v1Match = /(?:^|\/)(\d+)-/.exec(rel)
+  if (v1Match?.[1] !== undefined) return Number.parseInt(v1Match[1], 10)
+  const v2Match = /(?:^|\/)(?:Week|Milestone)\s+(\d+)(?:\s+-|\/)/i.exec(rel)
+  return v2Match?.[1] === undefined ? 0 : Number.parseInt(v2Match[1], 10)
+}
+
+function looksLikeModuleDocument(courseRoot: string, file: string, type: string): boolean {
+  if (type === vaultDocumentKinds.module) return true
+  const rel = relative(courseRoot, file).split(sep).join("/")
+  const first = rel.split("/")[0] ?? ""
+  return first === vaultLayout.modules || /^(?:Week|Milestone)\s+\d+/i.test(first)
 }
 
 function resolveItem(item: RawModuleItem, index: PathIndex): ModuleItem {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "school-agent",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Use and develop the local-first School Agent safely",
   "author": {
     "name": "School Agent contributors",

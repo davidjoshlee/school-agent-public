@@ -55,7 +55,7 @@ async function put(
 
 async function fixtureVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-simulate-")
-  const paths = coursePaths(root, course.code, course.canvasId)
+  const paths = coursePaths(root, course.code, course.canvasId).legacy
   const indexContent = [
     "# STRAT 101",
     "",
@@ -200,7 +200,7 @@ async function moduleScopedVault(): Promise<string> {
  */
 async function moduleReleaseVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-simulate-release-")
-  const paths = coursePaths(root, course.code, course.canvasId)
+  const paths = coursePaths(root, course.code, course.canvasId).legacy
   const indexContent = [
     "# STRAT 101",
     "",
@@ -384,7 +384,7 @@ describe("as-of simulation", () => {
       // Then: only the module's assignment is drafted, not every visible assignment.
       expect(result.runDirs).toEqual(["strat-101-2025-01-01"])
       expect(week.drafts).toHaveLength(1)
-      expect(week.drafts[0]?.path).toBe("drafts/pricing-memo.md")
+      expect(week.drafts[0]?.path).toBe("Assignments/Undated - pricing-memo/Drafts/pricing-memo.md")
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -405,7 +405,14 @@ describe("as-of simulation", () => {
       // Then: the guidance is present directly in the flat course-week dir so the replay can read it.
       expect(await readdir(root)).toEqual(["_simulations", "strat-101"])
       const staged = await readFile(
-        join(root, "_simulations", "strat-101-2025-01-01", "guidance", "prep-guidance.md"),
+        join(
+          root,
+          "_simulations",
+          "strat-101-2025-01-01",
+          "Resources",
+          "Guidance",
+          "prep-guidance.md",
+        ),
         "utf8",
       )
       expect(staged).toContain("Focus on the decision")

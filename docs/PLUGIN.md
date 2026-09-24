@@ -13,6 +13,13 @@ codex plugin add school-agent@personal
 
 Start a new Codex conversation after installation so the skills are available. Codex can select the matching focused skill from the user's task; the development skill applies when changing this repository.
 
+The v2 vault guidance ships as plugin version `0.3.0`. To refresh an existing Codex installation after a plugin version change, remove and reinstall it, then start a new conversation so the refreshed skill files are loaded:
+
+```bash
+codex plugin remove school-agent@personal
+codex plugin add school-agent@personal
+```
+
 ## Use with another compatible host
 
 Select or package the `plugins/school-agent` directory as the plugin root. It must include the root `plugin.json` and `skills/` directory; a host that supports the Agent Plugins portable format can discover the skills there. Hosts choose their own installation steps and may not support Codex-specific presentation metadata in `extensions.com.openai`.
@@ -23,7 +30,7 @@ This is a skills-only plugin. It contains instructions, not the School Agent CLI
 
 The plugin cannot verify a user's CLI version, configuration, Canvas access, vault, or course rules. Treat its guidance as a starting point and check the installed CLI's `--help` and current documentation for version-specific behavior. The plugin does not enforce academic policy or determine whether AI use is allowed in a course.
 
-When CLI commands or behavior change, update the relevant skill and keep its guidance aligned with `docs/CLI.md` and the implementation.
+The v2 vault organizes material by course, then by week or milestone. Prep generated from a selected period is stored in that period's `Prep/` folder; verify the path because fallback retrieval may not resolve to a period folder. See [the vault layout](vault-layout.md) for the tree and ownership rules. When CLI commands or behavior change, update the relevant skill and keep its guidance aligned with `docs/CLI.md` and the implementation.
 
 ## Quality checks
 

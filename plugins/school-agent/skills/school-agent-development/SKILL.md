@@ -11,7 +11,7 @@ Use the checked-out repository as the source of truth. Read its `CLAUDE.md`, the
 
 - Trace commands from `src/cli.ts` to the owning `*-cli.ts`, engine, and tests. Use [architecture](references/architecture.md) when changing a cross-module seam.
 - Canvas HTTP is GET-only. `src/store/paths.ts` owns vault layout; avoid competing path construction. Use [vault ownership](references/vault-ownership.md) before changing writers or migration behavior.
-- For prep or period selection, read [the prep contract](references/prep-contract.md). The output is a per-course `prep/` file, not currently a nested week directory. Preserve one canonical week/session identity across selection, output, and reruns.
+- For prep or period selection, read [the prep contract](references/prep-contract.md). Preserve one canonical course and period identity across selection and output; confirm the printed path is inside the matching `Week/Prep` or `Milestone/Prep` folder.
 - Model IDs belong in `config/models.default.json` and user overrides, not source files. Verify gateway availability before proposing a different default.
 
 ## Safety and verification

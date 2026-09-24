@@ -12,6 +12,7 @@ import {
   PrepContentError,
   PrepGenerationError,
   PrepNoMaterialsError,
+  prepPeriodPlacement,
 } from "../src/engines/prep.js"
 import { SpendCapExceededError } from "../src/models/cost.js"
 import { createSchoolIndex } from "../src/store/db.js"
@@ -128,6 +129,20 @@ const brief = [
 ].join("\n")
 
 describe("generatePrepBrief", () => {
+  it("places prep in the selected v2 week directory", () => {
+    expect(
+      prepPeriodPlacement({
+        mode: "module",
+        paths: [
+          "Week 01 - Sep 21/Other/Session 1 - Example Consulting.md",
+          "Week 01 - Sep 21/Other/DEMO Case Brief.pdf.md",
+        ],
+        moduleCanvasIds: ["module-1"],
+        moduleTitles: ["Session 1: Example Consulting"],
+      }),
+    ).toEqual({ kind: "week", number: 1, title: "Sep 21" })
+  })
+
   it("writes an auto-final weekly brief with only vault-backed reading links and records prep usage", async () => {
     // Given: a fixture course with posted material and a deterministic, keyless AI SDK model.
     const root = await fixtureVault()

@@ -1,15 +1,19 @@
 import { readdir, readFile } from "node:fs/promises"
-import { join, relative } from "node:path"
+import { basename, join, relative, sep } from "node:path"
 
-import { vaultLayout } from "../store/paths.js"
+import { slugify, vaultDocumentKinds, vaultLayout } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault.js"
 import { isEnoent } from "../util/errors.js"
 
 /**
  * Resolves a module item's `title`/`canvas_id` back to the vault-relative
- * path (and, for assignments, the `due_at`) sync wrote for it — the lookup
- * tables `retrieve-modules.ts`'s `resolveItem` needs, split out to keep that
- * file under the 250-LOC ceiling.
+ * path (and, for assignments, the `due_at`) sync wrote for it.
+ *
+ * V1 stored each artifact under a fixed lower-case directory. V2 groups
+ * artifacts under dated Week/Milestone and assignment directories instead,
+ * so this index deliberately discovers parsed documents recursively and uses
+ * frontmatter identity first, with path classification only as a v1/plain
+ * fixture fallback.
  */
 
 export type AssignmentEntry = { readonly path: string; readonly dueAt: string | null }
@@ -23,124 +27,97 @@ export type PathIndex = {
 }
 
 export async function buildPathIndex(courseRoot: string): Promise<PathIndex> {
-  const assignmentsDir = join(courseRoot, vaultLayout.assignments)
-  const filesDir = join(courseRoot, vaultLayout.files)
-  const [
-    assignmentsByCanvasId,
-    assignmentsBySlug,
-    filesByCanvasId,
-    filesBySlug,
-    moduleFilesBySlug,
-  ] = await Promise.all([
-    assignmentCanvasIdIndex(courseRoot, assignmentsDir),
-    assignmentSlugIndex(courseRoot, assignmentsDir),
-    canvasIdIndex(courseRoot, filesDir),
-    slugIndex(courseRoot, filesDir),
-    slugIndex(courseRoot, join(courseRoot, vaultLayout.modules)),
-  ])
+  const documents = await parsedMarkdownFiles(courseRoot)
+  const assignments = documents.filter((document) =>
+    isKind(document, vaultDocumentKinds.assignment),
+  )
+  const files = documents.filter((document) => isKind(document, vaultDocumentKinds.file))
+  const modules = documents.filter((document) => isKind(document, vaultDocumentKinds.module))
   return {
-    assignmentsByCanvasId,
-    assignmentsBySlug,
-    filesByCanvasId,
-    filesBySlug,
-    moduleFilesBySlug,
+    assignmentsByCanvasId: assignmentCanvasIdIndex(courseRoot, assignments),
+    assignmentsBySlug: assignmentSlugIndex(courseRoot, assignments),
+    filesByCanvasId: canvasIdIndex(courseRoot, files),
+    filesBySlug: slugIndex(courseRoot, files),
+    moduleFilesBySlug: slugIndex(courseRoot, modules),
   }
 }
 
-async function canvasIdIndex(
+function canvasIdIndex(
   courseRoot: string,
-  directory: string,
-): Promise<ReadonlyMap<string, string>> {
+  documents: readonly ParsedMarkdownFile[],
+): ReadonlyMap<string, string> {
   const index = new Map<string, string>()
-  for (const file of await listMarkdownFiles(directory)) {
-    try {
-      const parsed = parseVaultDocument(await readFile(file, "utf8"), file)
-      index.set(parsed.frontmatter.canvas_id, relative(courseRoot, file))
-    } catch {}
+  for (const document of documents) {
+    index.set(document.parsed.frontmatter.canvas_id, relativePath(courseRoot, document.path))
   }
   return index
 }
 
-async function assignmentCanvasIdIndex(
+function assignmentCanvasIdIndex(
   courseRoot: string,
-  directory: string,
-): Promise<ReadonlyMap<string, AssignmentEntry>> {
+  documents: readonly ParsedMarkdownFile[],
+): ReadonlyMap<string, AssignmentEntry> {
   const index = new Map<string, AssignmentEntry>()
-  for (const file of await listMarkdownFiles(directory)) {
-    try {
-      const parsed = parseVaultDocument(await readFile(file, "utf8"), file)
-      index.set(parsed.frontmatter.canvas_id, {
-        path: relative(courseRoot, file),
-        dueAt: parsed.frontmatter.dates["due_at"] ?? null,
-      })
-    } catch {}
+  for (const document of documents) {
+    index.set(document.parsed.frontmatter.canvas_id, {
+      path: relativePath(courseRoot, document.path),
+      dueAt: document.parsed.frontmatter.dates["due_at"] ?? null,
+    })
   }
   return index
 }
 
-async function assignmentSlugIndex(
+function assignmentSlugIndex(
   courseRoot: string,
-  directory: string,
-): Promise<ReadonlyMap<string, AssignmentEntry>> {
+  documents: readonly ParsedMarkdownFile[],
+): ReadonlyMap<string, AssignmentEntry> {
   const index = new Map<string, AssignmentEntry>()
-  for (const file of await listMarkdownFiles(directory)) {
-    const base = file.split("/").at(-1)?.replace(/\.md$/, "")
-    if (base === undefined) continue
-    try {
-      const parsed = parseVaultDocument(await readFile(file, "utf8"), file)
-      index.set(base, {
-        path: relative(courseRoot, file),
-        dueAt: parsed.frontmatter.dates["due_at"] ?? null,
-      })
-    } catch {
-      index.set(base, { path: relative(courseRoot, file), dueAt: null })
+  for (const document of documents) {
+    const path = relativePath(courseRoot, document.path)
+    const entry = {
+      path,
+      dueAt: document.parsed.frontmatter.dates["due_at"] ?? null,
+    }
+    for (const slug of pathSlugs(path, "assignment")) {
+      if (!index.has(slug)) index.set(slug, entry)
     }
   }
   return index
 }
 
-async function slugIndex(
+function slugIndex(
   courseRoot: string,
-  directory: string,
-): Promise<ReadonlyMap<string, string>> {
+  documents: readonly ParsedMarkdownFile[],
+): ReadonlyMap<string, string> {
   const index = new Map<string, string>()
-  for (const file of await listMarkdownFiles(directory)) {
-    const base = file.split("/").at(-1)?.replace(/\.md$/, "")
-    if (base !== undefined) index.set(base, relative(courseRoot, file))
+  for (const document of documents) {
+    const path = relativePath(courseRoot, document.path)
+    for (const slug of pathSlugs(path)) {
+      if (!index.has(slug)) index.set(slug, path)
+    }
   }
   return index
 }
 
 /**
- * Reverse membership index: module canvas id -> vault-relative paths of every
- * doc under assignments/, files/, and modules/ whose frontmatter carries that
- * `module_canvas_id`. This is the durable link `simulate-visibility.ts`
- * already trusts for visibility; module retrieval uses it the same way so a
- * doc reaches a selected module's context regardless of whether it also
- * appears in the module root doc's item list (e.g. a manually `ingest
- * --module`-tagged file, never listed there).
+ * Reverse membership index: module Canvas ID -> every document carrying that
+ * `module_canvas_id`. Scanning the complete course tree is necessary for v2,
+ * where a linked artifact may live under a Week's Materials or an assignment
+ * subtree instead of under a fixed lower-case directory.
  */
 export async function buildModuleMembership(
   courseRoot: string,
 ): Promise<ReadonlyMap<string, readonly string[]>> {
-  const directories = [vaultLayout.assignments, vaultLayout.files, vaultLayout.modules].map((dir) =>
-    join(courseRoot, dir),
-  )
   const membership = new Map<string, string[]>()
-  for (const directory of directories) {
-    for (const file of await listMarkdownFiles(directory)) {
-      try {
-        const parsed = parseVaultDocument(await readFile(file, "utf8"), file)
-        const moduleCanvasId = parsed.frontmatter.module_canvas_id
-        if (moduleCanvasId === undefined) continue
-        const rel = relative(courseRoot, file)
-        const existing = membership.get(moduleCanvasId)
-        if (existing === undefined) {
-          membership.set(moduleCanvasId, [rel])
-        } else {
-          existing.push(rel)
-        }
-      } catch {}
+  for (const document of await parsedMarkdownFiles(courseRoot)) {
+    const moduleCanvasId = document.parsed.frontmatter.module_canvas_id
+    if (moduleCanvasId === undefined) continue
+    const rel = relativePath(courseRoot, document.path)
+    const existing = membership.get(moduleCanvasId)
+    if (existing === undefined) {
+      membership.set(moduleCanvasId, [rel])
+    } else {
+      existing.push(rel)
     }
   }
   return membership
@@ -157,4 +134,74 @@ export async function listMarkdownFiles(root: string): Promise<readonly string[]
     if (isEnoent(error)) return []
     throw error
   }
+}
+
+type ParsedMarkdownFile = {
+  readonly path: string
+  readonly relativePath: string
+  readonly parsed: ReturnType<typeof parseVaultDocument>
+}
+
+async function parsedMarkdownFiles(courseRoot: string): Promise<readonly ParsedMarkdownFile[]> {
+  const documents: ParsedMarkdownFile[] = []
+  for (const file of await listMarkdownFiles(courseRoot)) {
+    try {
+      documents.push({
+        path: file,
+        relativePath: relativePath(courseRoot, file),
+        parsed: parseVaultDocument(await readFile(file, "utf8"), file),
+      })
+    } catch {
+      // Plain user notes are not Canvas artifacts. They remain in the vault,
+      // but do not participate in module resolution.
+    }
+  }
+  return documents
+}
+
+function isKind(document: ParsedMarkdownFile, kind: string): boolean {
+  if (document.parsed.frontmatter.type === kind) return true
+  const parts = document.relativePath.split("/")
+  const first = parts[0] ?? ""
+  if (kind === vaultDocumentKinds.module) {
+    return first === vaultLayout.modules || /^(?:Week|Milestone)\s+\d+/i.test(first)
+  }
+  if (kind === vaultDocumentKinds.assignment) {
+    return first === vaultLayout.assignments || first === vaultLayout.assignmentsDirectory
+  }
+  if (kind === vaultDocumentKinds.file) {
+    return (
+      first === vaultLayout.files ||
+      first === vaultLayout.filesDirectory ||
+      (first === vaultLayout.resources && parts[1] === vaultLayout.filesDirectory)
+    )
+  }
+  return false
+}
+
+function relativePath(courseRoot: string, path: string): string {
+  return relative(courseRoot, path).split(sep).join("/")
+}
+
+function pathSlugs(path: string, kind?: "assignment"): readonly string[] {
+  const parts = path.split("/")
+  const candidates = new Set<string>()
+  addSlug(candidates, basename(path).replace(/\.md$/i, ""))
+  if (kind === "assignment") {
+    const assignmentRootIndex = parts.findIndex(
+      (part) => part === vaultLayout.assignmentsDirectory || part === vaultLayout.assignments,
+    )
+    const root = assignmentRootIndex < 0 ? undefined : parts[assignmentRootIndex + 1]
+    if (root !== undefined) {
+      addSlug(candidates, root.replace(/^\d{4}-\d{2}-\d{2}\s+-\s+/, ""))
+      addSlug(candidates, root.replace(/^Undated\s+-\s+/i, ""))
+      addSlug(candidates, root.replace(/^Assignment\s+-\s+/i, ""))
+    }
+  }
+  return [...candidates]
+}
+
+function addSlug(target: Set<string>, value: string): void {
+  const slug = slugify(value, "")
+  if (slug.length > 0 && !/^\d+$/.test(slug)) target.add(slug)
 }

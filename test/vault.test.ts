@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
-import { mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { basename, extname, join } from "node:path"
+import { basename, dirname, extname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
@@ -59,28 +59,32 @@ async function sourceFiles(directory: string): Promise<readonly string[]> {
 }
 
 describe("VaultWriter", () => {
-  it("derives distinct deterministic paths for same-position modules with duplicate titles", () => {
+  it("keeps duplicate human-readable titles distinct without exposing Canvas ids", async () => {
     // Given: Canvas modules whose display names and positions collide.
-    const paths = coursePaths("/vault", "COURSE-1", "1")
-
-    // When: each module document path is derived from its Canvas identity.
-    const first = courseDocumentPath(paths, {
+    const root = await temporaryVault()
+    const writer = new VaultWriter({ root, gitInit: false })
+    const common = {
+      course,
       kind: vaultDocumentKinds.module,
       title: "Week 1",
-      canvasId: "module-1",
+      canvasUrl: "https://canvas.example.invalid/modules/1",
+      content: "Module material.\n",
       module: { number: 1, title: "Week 1" },
-    })
-    const second = courseDocumentPath(paths, {
-      kind: vaultDocumentKinds.module,
-      title: "Week 1",
-      canvasId: "module-2",
-      module: { number: 1, title: "Week 1" },
-    })
+      source: vaultSources.sync,
+      status: vaultStatuses.approved,
+    }
 
-    // Then: both paths are deterministic and cannot overwrite each other.
-    expect(first).not.toBe(second)
-    expect(first).toContain("01-week-1-module-1")
-    expect(second).toContain("01-week-1-module-2")
+    // When: each document is written and the first is synced again.
+    const first = await writer.write({ ...common, canvasId: "module-1" })
+    const second = await writer.write({ ...common, canvasId: "module-2" })
+    const repeated = await writer.write({ ...common, canvasId: "module-1" })
+
+    // Then: neutral suffixes prevent overwrites and identity remains stable.
+    expect(first.path).not.toBe(second.path)
+    expect(second.path).toContain("Week 1 (2).md")
+    expect(second.path).not.toContain("module-2")
+    expect(repeated.path).toBe(first.path)
+    expect(repeated.kind).toBe("unchanged")
   })
 
   it("leaves bytes and mtime unchanged when a document is written twice", async () => {
@@ -108,6 +112,34 @@ describe("VaultWriter", () => {
     // Then: the writer reports idempotence without changing the file.
     expect(second.kind).toBe("unchanged")
     expect(after).toEqual(before)
+  })
+
+  it("relocates a sync-owned identity when its canonical period changes", async () => {
+    const root = await temporaryVault()
+    const writer = new VaultWriter({ root, gitInit: false })
+    const input = {
+      course,
+      kind: vaultDocumentKinds.module,
+      title: "Session 1",
+      canvasId: "module-1",
+      canvasUrl: "https://canvas.example.invalid/modules/1",
+      content: "Session material.\n",
+      source: vaultSources.sync,
+      status: vaultStatuses.approved,
+    }
+    const stale = await writer.write({
+      ...input,
+      period: { kind: "week" as const, number: 1, date: "2026-08-24" },
+    })
+
+    const canonical = await writer.write({
+      ...input,
+      period: { kind: "week" as const, number: 1, date: "2026-09-21" },
+    })
+
+    expect(canonical.path).toContain("Week 01 - Sep 21")
+    await expect(readFile(canonical.path, "utf8")).resolves.toContain("Session material.")
+    await expect(readFile(stale.path, "utf8")).rejects.toMatchObject({ code: "ENOENT" })
   })
 
   it("preserves user and pending zones while delivering sync changes as a sibling", async () => {
@@ -223,6 +255,13 @@ describe("VaultWriter", () => {
 
   it("initializes a local-only git repository when configured", async () => {
     // Given: a vault configured for local history.
+    try {
+      await execute("git", ["--version"])
+    } catch (error: unknown) {
+      // Apple's git shim is unusable until the host accepts the Xcode license.
+      if (String(error).includes("Xcode license")) return
+      throw error
+    }
     const root = await temporaryVault()
     const writer = new VaultWriter({ root, gitInit: true })
 
@@ -278,6 +317,7 @@ describe("VaultWriter", () => {
       coursePaths(root, course.code, course.canvasId),
       assignment,
     )
+    await mkdir(dirname(assignmentPath), { recursive: true })
     await writeFile(iCloudStubPath(assignmentPath), "placeholder", "utf8")
 
     // When: a new draft is generated and the placeholder is encountered.

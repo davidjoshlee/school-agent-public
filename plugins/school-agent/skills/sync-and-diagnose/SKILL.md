@@ -16,7 +16,7 @@ Use the [School Agent product map](../../school-agent.md) for broader context. C
 
 ## Diagnose duplicate weeks or course mix-ups
 
-There is no standalone “week” folder contract for synced classes: weeks are represented by Canvas module/session metadata and dates. Prep output is a separate artifact under `<course>/prep/`. Its filename and frontmatter identify the requested period.
+The v2 vault groups synced course material under `Week NN - Mon DD/` or `Milestone NN - Title/` folders. Prep is stored in that period's `Prep/` directory when retrieval selected a matching module; otherwise it may appear in course-level `Other/Prep/`. For duplicate-week reports, compare course-code root, Canvas course ID, period number/date, and frontmatter before treating paths as duplicates. Same week labels in different course roots are expected.
 
 When two classes seem to contain the same week, first establish whether this is a duplicate course directory, duplicate module content, or a prep period mix-up:
 

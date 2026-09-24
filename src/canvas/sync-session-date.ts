@@ -59,6 +59,7 @@ function isoDate(year: number, month: number, day: number): string {
 }
 
 export type CourseYearInput = {
+  readonly course_code?: string | null | undefined
   readonly term?: { readonly start_at?: string | null | undefined } | null | undefined
   readonly start_at?: string | null | undefined
   readonly end_at?: string | null | undefined
@@ -81,6 +82,8 @@ export function resolveCourseYear(
     const year = new Date(explicit).getUTCFullYear()
     if (Number.isFinite(year)) return year
   }
+  const codeYear = courseCodeYear(course.course_code)
+  if (codeYear !== undefined) return codeYear
   const counts = new Map<number, number>()
   for (const dueAt of assignmentDueAts) {
     if (dueAt === undefined || dueAt === null) continue
@@ -92,4 +95,12 @@ export function resolveCourseYear(
   const max = Math.max(...counts.values())
   const majority = [...counts.entries()].filter(([, count]) => count === max)
   return majority.length === 1 ? majority[0]?.[0] : undefined
+}
+
+function courseCodeYear(code: string | null | undefined): number | undefined {
+  if (code === undefined || code === null) return undefined
+  const leadingTerm = /(?:^|[-_])(?:f|w|sp|su)(\d{2})(?:[-_]|$)/i.exec(code)?.[1]
+  const leadingYear = /(?:^|[-_])(\d{2})(?:f|w|sp|su)(?:[-_]|$)/i.exec(code)?.[1]
+  const value = leadingTerm ?? leadingYear
+  return value === undefined ? undefined : 2000 + Number.parseInt(value, 10)
 }

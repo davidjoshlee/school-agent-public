@@ -37,6 +37,6 @@ For an installed version, `school-agent --help` is the command authority. In a s
 - Canvas access remains GET-only. School Agent does not submit, post, or fetch replies.
 - AI-policy fields are metadata, not enforcement or permission. Verify course rules.
 - Vault and index are local, but generation sends selected text to AI Gateway/model providers. Restricted files default to exclusion.
-- A prep artifact exists under the course's `prep/` directory with period identity in its name/frontmatter; do not assume a nested week directory. A successful run and non-empty answer bodies do not prove that prep questions were answered correctly.
-- Approval moves a local draft toward `final/`; it is not submission to Canvas.
+- Prep belongs in the selected course's `Week NN - Mon DD/Prep/` or `Milestone NN - Title/Prep/` folder. Verify the output path and period identity; a successful run and non-empty answer bodies do not prove that prep questions were answered correctly.
+- Approval moves a local draft into its assignment's `Final/` folder; it is not submission to Canvas.
 - Real vault content, config, tokens, student identities, and coursework never belong in this public plugin or its tests.

@@ -322,7 +322,7 @@ describe("assignment engine", () => {
       })
 
       // Then: it is promoted to a final artifact rather than failing "not pending_approval".
-      expect(final.path).toMatch(/final/)
+      expect(final.path).toMatch(/Final/)
       expect(await readFile(final.path, "utf8")).toContain("Complete draft.")
     } finally {
       index.close()
@@ -384,11 +384,14 @@ describe("assignment engine", () => {
       expect(await readFile(third.path, "utf8")).toContain("<!-- feedback-only-present -->")
       expect(await readFile(final.path, "utf8")).toContain("Third pass.")
       // And: every gated version carries the self-review correctness check.
-      for (const path of [first.path, second.path, third.path, final.path]) {
+      for (const path of [first.path, second.path, third.path]) {
         const content = await readFile(path, "utf8")
         expect(content).toContain("## Correctness check")
         expect(content).toContain("Every requirement is addressed.")
       }
+      const finalContent = await readFile(final.path, "utf8")
+      expect(finalContent).not.toContain("## Correctness check")
+      expect(finalContent).not.toContain("school-agent-provenance")
     } finally {
       index.close()
       await rm(root, { recursive: true, force: true })
@@ -434,7 +437,7 @@ describe("assignment engine", () => {
 
       // Then: the linked file's vault path is recorded among the draft's sources.
       const provenance = parseAssignmentProvenance(await readFile(first.path, "utf8"))
-      expect(provenance.source_files).toContain("files/exampleco-case.md")
+      expect(provenance.source_files).toContain("Resources/Files/exampleco-case.md")
     } finally {
       index.close()
       await rm(root, { recursive: true, force: true })
@@ -443,13 +446,13 @@ describe("assignment engine", () => {
 
   it("banners an external exhibit-data link instead of letting the draft fabricate it", async () => {
     // Given: the assignment's own synced description references exhibit data
-    // that lives behind an external hbsp.harvard.edu link, not in the vault.
+    // that lives behind an external materials link, not in the vault.
     const root = await fixtureVault()
     const index = createSchoolIndex({ path: ":memory:" })
     const paths = coursePaths(root, course.code, course.canvasId)
     await put(
       join(paths.assignments, "pricing-memo.md"),
-      'See the overhead exhibit at <a href="https://hbsp.harvard.edu/import/123456">Exhibit 3</a>.',
+      'See the overhead exhibit at <a href="https://materials.example.invalid/import/123456">Exhibit 3</a>.',
     )
     let captured = ""
     const gate = tool({
@@ -480,9 +483,9 @@ describe("assignment engine", () => {
                 type: "text",
                 text: [
                   "## Missing required sources",
-                  "- Overhead exhibit data: https://hbsp.harvard.edu/import/123456",
+                  "- Overhead exhibit data: https://materials.example.invalid/import/123456",
                   "",
-                  "Overhead allocation: PENDING — requires https://hbsp.harvard.edu/import/123456",
+                  "Overhead allocation: PENDING — requires https://materials.example.invalid/import/123456",
                 ].join("\n"),
               },
               {
@@ -516,7 +519,7 @@ describe("assignment engine", () => {
       expect(captured).toContain("## Missing required sources")
       expect(captured).toContain("PENDING")
       expect(captured).toContain("Referenced sources NOT available to you")
-      expect(captured).toContain("https://hbsp.harvard.edu/import/123456")
+      expect(captured).toContain("https://materials.example.invalid/import/123456")
       // And: the gate still parks the bannered draft for approval as normal.
       expect(first.status).toBe("pending_approval")
       expect(await readFile(first.path, "utf8")).toContain("## Missing required sources")

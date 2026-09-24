@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises"
+import { relative, sep } from "node:path"
 
 import { z } from "zod"
 import { coursePaths, vaultDocumentKinds } from "../store/paths.js"
@@ -22,6 +23,12 @@ import {
 } from "./endpoints.js"
 import { type FileAuditGap, type FileIndexRecord, syncCanvasFile } from "./files.js"
 import { permissionDeniedStatus } from "./http.js"
+import {
+  classifyNavigationItem,
+  type NavigationDocument,
+  type NavigationPeriod,
+  navigationDate,
+} from "./sync-navigation.js"
 import {
   courseUrl,
   fileArtifactDates,
@@ -61,6 +68,17 @@ export type SyncResourceInput = {
   readonly course: VaultCourse
   /** Resolved once per course sync (see `resolveCourseYear`); threaded through so every `moduleDates` call resolves `session_at` consistently. */
   readonly courseYear?: number
+  /** Mutable per-course collector used to render Home/Overview after writes. */
+  readonly navigation?: SyncNavigationCollector
+  /** Precomputed human period placement keyed by containing Canvas module id. */
+  readonly modulePeriods?: ReadonlyMap<string, NavigationPeriod>
+  /** File ids already placed through a module/page/assignment relationship. */
+  readonly skipFileIds?: ReadonlySet<string>
+}
+
+export type SyncNavigationCollector = {
+  readonly courseRoot: string
+  readonly documents: NavigationDocument[]
 }
 
 type ArtifactInput = {
@@ -78,6 +96,18 @@ type ArtifactInput = {
     readonly canvasId?: string | number
   }
   readonly moduleCanvasId?: string | number
+  readonly period?: {
+    readonly kind?: "week" | "milestone"
+    readonly number: number
+    readonly date?: string | Date | null
+    readonly title?: string
+  }
+  readonly assignment?: {
+    readonly title: string
+    readonly dueAt?: string | Date | null
+  }
+  readonly bucket?: "prep" | "materials" | "other"
+  readonly navigation?: SyncNavigationCollector
 }
 
 export async function syncFiles(
@@ -88,6 +118,7 @@ export async function syncFiles(
   },
 ): Promise<void> {
   for (const file of input.files) {
+    if (input.skipFileIds?.has(String(file.id))) continue
     await syncFileRecord(input, file)
   }
 }
@@ -102,11 +133,18 @@ export async function syncModuleFiles(
   for (const { module, item } of moduleFileItems(input.modules)) {
     const contentId = item.content_id
     if (contentId === undefined) continue
+    if (input.skipFileIds instanceof Set) input.skipFileIds.add(String(contentId))
     const dates = moduleDates(module, input.courseYear)
     await recoverFileById(input, contentId, {
       ...(item.title === undefined ? {} : { displayNameFallback: item.title }),
       ...(dates === undefined ? {} : { dates }),
       moduleCanvasId: module.id,
+      period: modulePeriod(input, module.id),
+      bucket: classifyNavigationItem({
+        title: item.title ?? `File ${contentId}`,
+        path: item.title ?? "",
+        type: "file",
+      }),
     })
   }
 }
@@ -128,9 +166,16 @@ export async function syncAssignmentFiles(
     }
     const moduleCanvasId = input.assignmentModuleIds?.get(String(assignment.id))
     for (const fileId of fileIdsFromHtml(assignment.description)) {
+      if (input.skipFileIds instanceof Set) input.skipFileIds.add(String(fileId))
       await recoverFileById(input, fileId, {
         dates,
         ...(moduleCanvasId === undefined ? {} : { moduleCanvasId }),
+        ...(moduleCanvasId === undefined ? {} : { period: modulePeriod(input, moduleCanvasId) }),
+        assignment: {
+          title: assignment.name ?? `Assignment ${assignment.id}`,
+          dueAt: assignment.due_at ?? null,
+        },
+        bucket: "materials",
       })
     }
   }
@@ -153,9 +198,17 @@ export async function syncPageFiles(
   for (const { page, module } of input.pages) {
     const dates = moduleDates(module, input.courseYear)
     for (const fileId of fileIdsFromHtml(page.body)) {
+      if (input.skipFileIds instanceof Set) input.skipFileIds.add(String(fileId))
       await recoverFileById(input, fileId, {
         ...(dates === undefined ? {} : { dates }),
         moduleCanvasId: module.id,
+        period: modulePeriod(input, module.id),
+        bucket: classifyNavigationItem({
+          title: page.title ?? page.url,
+          path: page.url,
+          type: "page",
+          ...(page.body === null || page.body === undefined ? {} : { content: page.body }),
+        }),
       })
     }
   }
@@ -175,6 +228,7 @@ export async function syncSyllabusFiles(
   },
 ): Promise<void> {
   for (const fileId of fileIdsFromHtml(input.syllabusBody)) {
+    if (input.skipFileIds instanceof Set) input.skipFileIds.add(String(fileId))
     await recoverFileById(input, fileId)
   }
 }
@@ -189,6 +243,9 @@ async function recoverFileById(
     readonly displayNameFallback?: string
     readonly dates?: Readonly<Record<string, string | null>>
     readonly moduleCanvasId?: string | number
+    readonly period?: ArtifactInput["period"]
+    readonly assignment?: ArtifactInput["assignment"]
+    readonly bucket?: ArtifactInput["bucket"]
   },
 ): Promise<void> {
   let file: CanvasFile
@@ -212,6 +269,7 @@ async function recoverFileById(
     { ...file, display_name: file.display_name ?? opts?.displayNameFallback },
     opts?.dates,
     opts?.moduleCanvasId,
+    opts,
   )
 }
 
@@ -223,6 +281,11 @@ async function syncFileRecord(
   file: CanvasFile,
   dates?: Readonly<Record<string, string | null>>,
   moduleCanvasId?: string | number,
+  placement?: {
+    readonly period?: ArtifactInput["period"]
+    readonly assignment?: ArtifactInput["assignment"]
+    readonly bucket?: ArtifactInput["bucket"]
+  },
 ): Promise<void> {
   // Canvas can return an empty-string `url` for some files (not just null/undefined),
   // and `??` would keep the empty string — an invalid canvas_url that later fails z.url()
@@ -290,6 +353,10 @@ async function syncFileRecord(
         content: result.extraction.text ?? "",
         ...(artifactDates === undefined ? {} : { dates: artifactDates }),
         ...(moduleCanvasId === undefined ? {} : { moduleCanvasId }),
+        ...(placement?.period === undefined ? {} : { period: placement.period }),
+        ...(placement?.assignment === undefined ? {} : { assignment: placement.assignment }),
+        ...(placement?.bucket === undefined ? {} : { bucket: placement.bucket }),
+        ...(input.navigation === undefined ? {} : { navigation: input.navigation }),
       })
       input.options.index.upsertFile({
         canvasId: file.id,
@@ -350,6 +417,7 @@ export async function syncTextResources(
         discussion.html_url ?? courseUrl(input.options.canvasBaseUrl, input.canvasCourse.id),
       content: renderDiscussion(discussion),
       module: { number: 0, title: "Synced discussions" },
+      ...(input.navigation === undefined ? {} : { navigation: input.navigation }),
     })
   }
   for (const quiz of input.quizzes) {
@@ -362,6 +430,7 @@ export async function syncTextResources(
       canvasUrl: quiz.html_url ?? courseUrl(input.options.canvasBaseUrl, input.canvasCourse.id),
       content: renderQuiz(quiz),
       module: { number: 0, title: "Synced quizzes" },
+      ...(input.navigation === undefined ? {} : { navigation: input.navigation }),
     })
   }
 }
@@ -392,6 +461,10 @@ export async function syncFeedback(
     canvasUrl:
       input.assignment.html_url ?? courseUrl(input.options.canvasBaseUrl, input.canvasCourse.id),
     content,
+    assignment: {
+      title: input.assignment.name ?? `Assignment ${input.assignment.id}`,
+      dueAt: input.assignment.due_at ?? null,
+    },
   })
   if (feedback.kind === "unchanged") return
   const path = coursePaths(
@@ -423,7 +496,7 @@ export async function syncFeedback(
 }
 
 export async function writeArtifact(input: ArtifactInput): Promise<VaultWriteResult> {
-  return input.writer.write({
+  const result = await input.writer.write({
     course: input.course,
     kind: input.kind,
     title: input.title,
@@ -435,7 +508,49 @@ export async function writeArtifact(input: ArtifactInput): Promise<VaultWriteRes
     status: vaultStatuses.final,
     ...(input.module === undefined ? {} : { module: input.module }),
     ...(input.moduleCanvasId === undefined ? {} : { moduleCanvasId: input.moduleCanvasId }),
+    ...(input.period === undefined ? {} : { period: input.period }),
+    ...(input.assignment === undefined ? {} : { assignment: input.assignment }),
+    ...(input.bucket === undefined ? {} : { bucket: input.bucket }),
   })
+  if (input.navigation !== undefined && shouldRecordNavigation(input.kind)) {
+    const periodId = navigationPeriodId(input.period)
+    input.navigation.documents.push({
+      title: input.title,
+      path: relative(input.navigation.courseRoot, result.path).split(sep).join("/"),
+      type: input.kind,
+      canvasId: input.canvasId,
+      ...(input.dates === undefined ? {} : { dates: input.dates }),
+      ...(input.content.length === 0 ? {} : { content: input.content }),
+      ...(periodId === undefined ? {} : { periodId }),
+      ...(input.period?.title === undefined ? {} : { periodTitle: input.period.title }),
+    })
+  }
+  return result
+}
+
+function navigationPeriodId(period: ArtifactInput["period"]): string | undefined {
+  if (period === undefined) return undefined
+  if ((period.kind ?? "week") === "milestone") return `milestone-${period.number}`
+  const date = navigationDate(period.date)
+  return date === null ? undefined : `week-${date}`
+}
+
+function shouldRecordNavigation(kind: string): boolean {
+  return kind !== vaultDocumentKinds.feedback && kind !== vaultDocumentKinds.playbook
+}
+
+function modulePeriod(
+  input: SyncResourceInput,
+  moduleId: string | number,
+): ArtifactInput["period"] | undefined {
+  const period = input.modulePeriods?.get(String(moduleId))
+  if (period === undefined) return undefined
+  return {
+    kind: period.kind,
+    number: period.number,
+    date: navigationDate(period.startDate),
+    title: period.title,
+  }
 }
 
 function previousFileRecord(value: string | null): FileIndexRecord | undefined {

@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 
 import type { SchoolConfig } from "../config/index.js"
-import { coursePaths, slugify, vaultLayout } from "../store/paths.js"
+import { coursePaths, slugify, vaultDocumentKinds, vaultLayout } from "../store/paths.js"
 import { parseVaultDocument, renderVaultDocument } from "../store/vault.js"
 import type { PrepCourse } from "./prep.js"
 import { SimulationError } from "./simulate.js"
@@ -96,7 +96,7 @@ export async function stageSnapshot(
   const staged = new Map<string, SnapshotDocument>()
   for (const document of documents) staged.set(document.relativePath, document)
   for (const document of snapshot.documents) {
-    if (document.relativePath.startsWith("guidance/")) {
+    if (isGuidanceDocument(document)) {
       staged.set(document.relativePath, document)
     }
   }
@@ -119,16 +119,16 @@ export async function stageSnapshot(
 export function assignmentDocuments(
   documents: readonly SnapshotDocument[],
 ): readonly SnapshotDocument[] {
-  return documents.filter((document) => document.relativePath.startsWith("assignments/"))
+  return documents.filter(isAssignmentDocument)
 }
 
 /**
  * Narrow the assignments a simulation drafts to the ones a single module
  * references. A module document lists its assignment items as `- Assignment:
  * <title>` (see renderModuleItem in sync-render.ts). The referenced title is
- * slugified and resolved back to the `assignments/<slug>.md` document path that
- * sync writes (courseDocumentPath uses the same slugify), so an assignment
- * belongs to a module when its path matches one of the module's references.
+ * slugified and resolved against either the v1 `assignments/<slug>.md` path or
+ * the v2 assignment folder title, so an assignment belongs to a module when
+ * its path or Canvas ID matches one of the module's references.
  *
  * The module document itself may carry no date signal (dates: {}), so it is
  * looked up across the ENTIRE snapshot, not just the visible set, while the
@@ -143,7 +143,7 @@ export function moduleAssignmentDocuments(
 ): readonly SnapshotDocument[] {
   const moduleDocument = snapshot.documents.find(
     (document) =>
-      document.relativePath.startsWith("modules/") &&
+      isModuleDocument(document) &&
       parseVaultDocument(document.raw, document.path).frontmatter.canvas_id === moduleCanvasId,
   )
   if (moduleDocument === undefined) {
@@ -154,10 +154,14 @@ export function moduleAssignmentDocuments(
   // and the older title-only form (vaults synced before that enrichment).
   const assignmentLine = /^- Assignment:\s*(.+?)(?:\s*\(canvas_id:\s*(\S+)\))?\s*$/gm
   const byCanvasId = new Map<string, string>()
+  const byTitle = new Map<string, string>()
   for (const document of visible) {
-    if (!document.relativePath.startsWith("assignments/")) continue
-    const id = parseVaultDocument(document.raw, document.path).frontmatter.canvas_id
+    if (!isAssignmentDocument(document)) continue
+    const parsed = parseVaultDocument(document.raw, document.path)
+    const id = parsed.frontmatter.canvas_id
     byCanvasId.set(id, document.relativePath)
+    const title = assignmentTitleSlug(document.relativePath)
+    if (title !== null && !byTitle.has(title)) byTitle.set(title, document.relativePath)
   }
   const referencedPaths = new Set(
     [...content.matchAll(assignmentLine)].flatMap((match) => {
@@ -167,7 +171,8 @@ export function moduleAssignmentDocuments(
         const byId = byCanvasId.get(canvasId)
         if (byId !== undefined) return [byId]
       }
-      return title.length === 0 ? [] : [`assignments/${slugify(title, "untitled")}.md`]
+      const byPath = title.length === 0 ? undefined : byTitle.get(slugify(title, "untitled"))
+      return byPath === undefined ? [] : [byPath]
     }),
   )
   return visible.filter((document) => referencedPaths.has(document.relativePath))
@@ -191,11 +196,11 @@ async function snapshotDocuments(
 
   const moduleDatesById: ModuleDatesById = new Map(
     files
-      .filter((file) => file.relativePath.startsWith(`${vaultLayout.modules}/`))
+      .filter(isModuleDocument)
       .map((file) => [file.parsed.frontmatter.canvas_id, file.parsed.frontmatter.dates]),
   )
   const assignmentDueAts = files
-    .filter((file) => file.relativePath.startsWith(`${vaultLayout.assignments}/`))
+    .filter(isAssignmentDocument)
     .map((file) => file.parsed.frontmatter.dates["due_at"])
   const cutoff = courseSetupCutoff(moduleDatesById, assignmentDueAts)
 
@@ -229,4 +234,71 @@ function filteredManifest(content: string, allowed: ReadonlySet<string>): string
       return path === undefined || path === "Path" || path.startsWith("-") || allowed.has(path)
     })
     .join("\n")
+}
+
+type SnapshotDocumentLike = Pick<SnapshotDocument, "path" | "relativePath" | "raw">
+
+function isAssignmentDocument(document: SnapshotDocumentLike): boolean {
+  try {
+    if (
+      parseVaultDocument(document.raw, document.path).frontmatter.type ===
+      vaultDocumentKinds.assignment
+    ) {
+      return true
+    }
+  } catch {
+    // Older snapshots may have metadata that cannot be parsed. Retain path-based
+    // recognition below so a malformed unrelated document is not misclassified.
+  }
+  const first = document.relativePath.split("/")[0] ?? ""
+  return first === vaultLayout.assignments || first === vaultLayout.assignmentsDirectory
+}
+
+function isModuleDocument(document: SnapshotDocumentLike): boolean {
+  try {
+    if (
+      parseVaultDocument(document.raw, document.path).frontmatter.type === vaultDocumentKinds.module
+    ) {
+      return true
+    }
+  } catch {
+    // Fall back to known legacy/v2 container names for older snapshots.
+  }
+  const first = document.relativePath.split("/")[0] ?? ""
+  return first === vaultLayout.modules || /^(?:Week|Milestone)\s+\d+/i.test(first)
+}
+
+function isGuidanceDocument(document: SnapshotDocumentLike): boolean {
+  try {
+    if (
+      parseVaultDocument(document.raw, document.path).frontmatter.type ===
+      vaultDocumentKinds.guidance
+    ) {
+      return true
+    }
+  } catch {
+    // Older snapshots may have incomplete metadata; use the legacy path below.
+  }
+  return document.relativePath.startsWith(`${vaultLayout.guidance}/`)
+}
+
+function assignmentTitleSlug(path: string): string | null {
+  const parts = path.split("/")
+  const index = parts.findIndex(
+    (part) => part === vaultLayout.assignmentsDirectory || part === vaultLayout.assignments,
+  )
+  if (index >= 0) {
+    const directory = parts[index + 1]
+    if (directory !== undefined && !directory.endsWith(".md")) {
+      const title = directory
+        .replace(/^\d{4}-\d{2}-\d{2}\s+-\s+/, "")
+        .replace(/^Undated\s+-\s+/i, "")
+        .replace(/^Assignment\s+-\s+/i, "")
+      const slug = slugify(title, "")
+      if (slug.length > 0) return slug
+    }
+  }
+  const filename = parts.at(-1)?.replace(/\.md$/i, "")
+  if (filename === undefined || filename.length === 0) return null
+  return slugify(filename, "") || null
 }

@@ -30,8 +30,22 @@ runs an initial `sync`).
 - `sync-resources.ts` — resource-specific sync helpers (modules, files, discussions, etc.) factored out of `sync-course.ts`.
 - `sync-render.ts` — renders fetched Canvas objects into vault Markdown/frontmatter document bodies.
 - `sync-session-date.ts` — parses a course/module's session date (e.g. "Session 8") out of titles for ordering and the as-of clock.
+- `sync-navigation.ts` — pure navigation model, conservative Prep/Materials/Other classification,
+  calendar-week or milestone grouping, and `00 Home.md`/`00 Overview.md` Markdown rendering.
 - `sync-types.ts` — shared types for sync input/report/status/permission-gap across `sync.ts` and `sync-course.ts`.
 - `sync-cli.ts` — `register` wrapper exposing `sync` and `audit` on the CLI.
+
+### Navigation writer seam
+
+`buildNavigationModel` accepts normalized document records (including their
+relative vault path and existing frontmatter `dates`) and
+`navigationArtifacts` returns the home page plus one overview per populated
+period. The v2 vault writer should call this after all course artifacts have
+been written, adapting its document index/frontmatter rows into
+`NavigationDocument` records and persisting each returned `{ path, content }`.
+The navigation module intentionally does not import the path vocabulary or
+write files, so it remains usable while the v2 layout is migrated and stays
+free of network dependencies in tests.
 
 ## Onboard
 

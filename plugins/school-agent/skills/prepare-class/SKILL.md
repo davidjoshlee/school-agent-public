@@ -10,7 +10,7 @@ Use the [School Agent product map](../../school-agent.md) for broader context. C
 ## Generate for the intended period
 
 1. Resolve the intended course to its exact Canvas ID or course code using the user's request and, if needed, the local course list/index. Resolve the intended week to an explicit ISO date (`YYYY-MM-DD`) or the class session identifier. Do not silently substitute today's date, `current`, the next calendar week, or another class. If the requested period is unclear, ask before generating.
-2. Before generating, inspect the intended course's existing `prep/` artifacts for the same period. The current prep writer can replace a same-period brief. If one exists, preserve it or confirm that replacing it is intended before rerunning; do not rely on the CLI to version a prep brief. Then run one of:
+2. Before generating or rerunning, inspect the intended course's existing brief for that period. Prep is stored under the selected course's period folder (`Week NN - Mon DD/Prep/` or `Milestone NN - Title/Prep/`). A repeat run writes to that canonical path: identical bytes are unchanged, while changed generated content can replace the existing prep. Preserve the existing brief or confirm a refresh is intended before rerunning. Then run one of:
 
    ```sh
    school-agent prep <course-id-or-code> --week YYYY-MM-DD
@@ -18,7 +18,7 @@ Use the [School Agent product map](../../school-agent.md) for broader context. C
    ```
 
    The CLI accepts one period selector at a time. If the requested period has no synced materials, sync the intended course and retry; do not switch periods to force an output.
-3. Capture and inspect the exact output path printed by the command. Confirm it is under the intended course's `prep/` directory and that filename/title/frontmatter identify the requested week or session. The current layout does not create a nested week directory.
+3. Capture and inspect the exact output path printed by the command. Confirm it is under the intended course and exact week or milestone `Prep/` folder, and that filename/title/frontmatter identify the requested period. If it lands in course-level `Other/Prep/`, selected context did not resolve to a Week/Milestone folder; diagnose selection and sources before treating it as that week's prep.
 
 ## Review the brief
 

@@ -8,7 +8,7 @@ import { OnboardModeError, PilotOptionRequiredError } from "../src/canvas/onboar
 import { createProgram } from "../src/cli.js"
 import { loadConfig } from "../src/config/index.js"
 import { createSchoolIndex } from "../src/store/db.js"
-import { coursePaths } from "../src/store/paths.js"
+import { assignmentPaths, coursePaths } from "../src/store/paths.js"
 import { parseVaultDocument } from "../src/store/vault-document.js"
 import { createConfiguration, installPilotHandlers } from "./helpers/onboard-fixtures.js"
 import { client } from "./helpers/schoolConfig.js"
@@ -87,9 +87,10 @@ describe("pilot onboarding", () => {
     const configuration = loadConfig(paths.configurationPath)
     const course = coursePaths(paths.vaultPath, "STRAT-10", "10")
     const syllabus = parseVaultDocument(await readFile(course.syllabus, "utf8"))
-    await expect(
-      readFile(join(course.assignments, "case-memo.feedback.md"), "utf8"),
-    ).resolves.toContain("Lead with the evidence.")
+    const assignment = assignmentPaths(course, { title: "Case memo" })
+    await expect(readFile(assignment.feedback, "utf8")).resolves.toContain(
+      "Lead with the evidence.",
+    )
     await expect(readFile(course.playbook, "utf8")).resolves.toContain("Lead with the evidence.")
     await expect(readFile(join(course.guidance, "readme.md"), "utf8")).resolves.toContain(
       "Guidance",

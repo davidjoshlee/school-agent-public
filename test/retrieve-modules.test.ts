@@ -15,7 +15,7 @@ import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { realSchoolModels, schoolConfig } from "./helpers/schoolConfig.js"
 import { temporaryDirectory } from "./helpers/tempDir.js"
 
-const course = { code: "ACCT 213", canvasId: "course-9" } as const
+const course = { code: "DEMO 213", canvasId: "course-9" } as const
 
 function config(): ReturnType<typeof schoolConfig> {
   return schoolConfig({
@@ -69,7 +69,7 @@ const session6HomeworkTitle = "Session 6 Homework"
  */
 async function threeSessionVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-retrieve-modules-")
-  const paths = coursePaths(root, course.code, course.canvasId)
+  const paths = coursePaths(root, course.code, course.canvasId).legacy
 
   await put(
     join(paths.modules, "06-session-6-601m", "session-6.md"),
@@ -250,7 +250,7 @@ describe("selectModulesForAssignment with module_canvas_id reverse links", () =>
   it("includes a manually-ingested file carrying module_canvas_id even though it is not a module item", async () => {
     const root = await threeSessionVault()
     try {
-      const paths = coursePaths(root, course.code, course.canvasId)
+      const paths = coursePaths(root, course.code, course.canvasId).legacy
       await mkdir(dirname(join(paths.files, "manual-exhibit.md")), { recursive: true })
       await writeFile(
         join(paths.files, "manual-exhibit.md"),
@@ -352,7 +352,7 @@ describe("selectModulesForPeriod", () => {
   it("selects a module with no unlock_at/session_at of its own by the due_at of an assignment it references", async () => {
     const root = await threeSessionVault()
     try {
-      const paths = coursePaths(root, course.code, course.canvasId)
+      const paths = coursePaths(root, course.code, course.canvasId).legacy
       const session10Title = "Session 10 Homework"
       // A module with no date signal of its own at all.
       await put(
@@ -389,7 +389,7 @@ describe("assembleCourseContext with module selection", () => {
   it("excludes unrelated-session keyword matches and logs the selected modules", async () => {
     const root = await threeSessionVault()
     try {
-      const paths = coursePaths(root, course.code, course.canvasId)
+      const paths = coursePaths(root, course.code, course.canvasId).legacy
       // A manifest whose task-string keyword scoring would otherwise admit
       // every row (mirroring the real prep/assignment task strings) —
       // module selection must suppress this entirely.
@@ -442,7 +442,7 @@ describe("assembleCourseContext with module selection", () => {
   it("logs keyword-fallback when module selection finds nothing", async () => {
     const root = await threeSessionVault()
     try {
-      const paths = coursePaths(root, course.code, course.canvasId)
+      const paths = coursePaths(root, course.code, course.canvasId).legacy
       await put(
         paths.index,
         "manifest",

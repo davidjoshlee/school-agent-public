@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 
 import { runCli } from "../src/cli.js"
+import { coursePaths } from "../src/store/paths.js"
 import { VaultWriter, vaultSources, vaultStatuses } from "../src/store/vault.js"
 
 const course = {
@@ -30,7 +31,7 @@ async function seedCourse(root: string): Promise<void> {
 }
 
 describe("school ingest CLI", () => {
-  it("writes an off-Canvas file into the matched course's files/ and regenerates the manifest", async () => {
+  it("writes an off-Canvas file into the matched course's Resources/Files and regenerates the manifest", async () => {
     // Given: a vault with a synced course and a local exhibit file to ingest.
     const root = await mkdtemp(join(tmpdir(), "school-agent-ingest-cli-"))
     const configPath = join(root, "school.config.json")
@@ -62,11 +63,11 @@ describe("school ingest CLI", () => {
         "2025-10-01",
       ])
 
-      // Then: the artifact is written under files/ with the extracted text and user provenance.
+      // Then: the artifact is written under Resources/Files with extracted text and user provenance.
       expect(exitCode).toBe(0)
       expect(log).toHaveBeenCalledTimes(1)
       const writtenPath = log.mock.calls[0]?.[0] as string
-      expect(writtenPath).toContain(join(vaultPath, "strat-101", "files"))
+      expect(writtenPath).toContain(coursePaths(vaultPath, course.code, course.canvasId).files)
       const written = await readFile(writtenPath, "utf8")
       expect(written).toContain("ExampleWorks exhibit numbers: revenue 42.")
       expect(written).toContain("source: user")
@@ -74,7 +75,7 @@ describe("school ingest CLI", () => {
 
       // And: the manifest gains a row for the new file.
       const manifest = await readFile(join(vaultPath, "strat-101", "_index.md"), "utf8")
-      expect(manifest).toContain("files/exampleworks-exhibit.md")
+      expect(manifest).toContain("Resources/Files/ExampleWorks Exhibit.md")
     } finally {
       log.mockRestore()
       await rm(root, { recursive: true, force: true })

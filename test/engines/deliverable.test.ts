@@ -80,6 +80,23 @@ describe("detectDeliverable — shape A: discussion study guide", () => {
     expect(result.sourcePath).toBe("guidance/study-guide.md")
     expect(result.cue).toBe("Prepare your answers to the following questions")
   })
+
+  it("detects a Canvas page headed Preparation Questions", () => {
+    const result = detectDeliverable([
+      source(
+        "session.md",
+        "<strong>Preparation Questions</strong><ol><li>Why integrate the venture?</li><li>Why restore its independence?</li><li>What explains the turnaround?</li></ol>",
+      ),
+    ])
+    expect(result.kind).toBe("questions")
+    if (result.kind !== "questions") throw new Error("expected questions")
+    expect(result.items).toEqual([
+      { id: "1", text: "Why integrate the venture?" },
+      { id: "2", text: "Why restore its independence?" },
+      { id: "3", text: "What explains the turnaround?" },
+    ])
+    expect(result.cue).toBe("Preparation Questions")
+  })
 })
 
 describe("detectDeliverable — shape B: case with Required section", () => {

@@ -80,16 +80,16 @@ describe("Canvas sync course manifest", () => {
         createHash("sha256").update("").digest("hex"),
       )
       expect(entries.map((entry) => entry.path)).toEqual([
-        "00-syllabus.md",
-        "assignments/case-memo.md",
-        "modules/01-week-1-11/week-1.md",
-        "modules/01-week-1-41/intro.md",
+        "Assignments/Undated - Case memo/00 Prompt.md",
+        "Other/Intro.md",
+        "Other/Week 1.md",
+        "Resources/Syllabus.md",
       ])
       expect(entries).toContainEqual({
         title: "Case memo",
         type: "assignments",
         dates: "2026-02-18",
-        path: "assignments/case-memo.md",
+        path: "Assignments/Undated - Case memo/00 Prompt.md",
         tokenEstimate: expect.any(Number),
         restricted: false,
       })
@@ -97,7 +97,7 @@ describe("Canvas sync course manifest", () => {
         title: "Intro",
         type: "modules",
         dates: "unknown",
-        path: "modules/01-week-1-41/intro.md",
+        path: "Other/Intro.md",
         tokenEstimate: expect.any(Number),
         restricted: false,
       })
