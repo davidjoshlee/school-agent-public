@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises"
-import { basename, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 
 import { createGateway, stepCountIs, tool } from "ai"
 import type { Command } from "commander"
@@ -10,7 +10,7 @@ import { AISDKAgentRunner } from "../agents/runner.js"
 import { loadConfig, type SchoolConfig } from "../config/index.js"
 import { modelMappings } from "../models/index.js"
 import { createSchoolIndex } from "../store/db.js"
-import { vaultLayout } from "../store/paths.js"
+import { slugify, vaultDocumentKinds, vaultLayout } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault.js"
 import { readDirectory, readOptional } from "../util/fs.js"
 import {
@@ -30,6 +30,7 @@ type LocatedAssignment = {
     readonly canvasId: string
     readonly title: string
     readonly canvasUrl: string
+    readonly dueAt: string | null
     readonly groupCategoryId: string | null
   }
 }
@@ -188,23 +189,24 @@ async function locateAssignment(vaultRoot: string, identifier: string): Promise<
     }
     const courseRoot = join(vaultRoot, courseDirectory.name)
     const indexPath = join(courseRoot, vaultLayout.index)
-    const assignmentsPath = join(courseRoot, vaultLayout.assignments)
     const index = await readOptional(indexPath)
     if (index === null) {
       continue
     }
     const courseDocument = parseVaultDocument(index, indexPath)
-    const entries = await readDirectory(assignmentsPath)
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
+    for (const assignmentPath of await markdownFiles(courseRoot)) {
+      let assignmentDocument: ReturnType<typeof parseVaultDocument>
+      try {
+        assignmentDocument = parseVaultDocument(
+          await readFile(assignmentPath, "utf8"),
+          assignmentPath,
+        )
+      } catch {
         continue
       }
-      const assignmentPath = join(assignmentsPath, entry.name)
-      const assignmentDocument = parseVaultDocument(
-        await readFile(assignmentPath, "utf8"),
-        assignmentPath,
-      )
-      const slug = basename(entry.name, ".md")
+      if (assignmentDocument.frontmatter.type !== vaultDocumentKinds.assignment) continue
+      const title = assignmentTitle(assignmentPath)
+      const slug = slugify(title, `untitled-${assignmentDocument.frontmatter.canvas_id}`)
       if (identifier !== assignmentDocument.frontmatter.canvas_id && identifier !== slug) {
         continue
       }
@@ -216,12 +218,30 @@ async function locateAssignment(vaultRoot: string, identifier: string): Promise<
         },
         assignment: {
           canvasId: assignmentDocument.frontmatter.canvas_id,
-          title: slug,
+          title,
           canvasUrl: assignmentDocument.frontmatter.canvas_url,
+          dueAt: assignmentDocument.frontmatter.dates["due_at"] ?? null,
           groupCategoryId: groupCategoryFromContent(assignmentDocument.content),
         },
       }
     }
   }
   throw new AssignmentCommandError(`Assignment not found: ${identifier}. Run school sync first.`)
+}
+
+function assignmentTitle(path: string): string {
+  if (basename(path) !== vaultLayout.prompt) return basename(path, vaultLayout.markdownExtension)
+  return basename(dirname(path)).replace(/^(?:\d{4}-\d{2}-\d{2}|Undated) - /, "")
+}
+
+async function markdownFiles(directory: string): Promise<readonly string[]> {
+  const entries = await readDirectory(directory)
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) return markdownFiles(path)
+      return Promise.resolve(entry.isFile() && entry.name.endsWith(".md") ? [path] : [])
+    }),
+  )
+  return nested.flat()
 }

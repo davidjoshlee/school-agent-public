@@ -5,6 +5,7 @@ import { HttpResponse, http } from "msw"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
+  CanvasTokenUnavailableError,
   FixtureSecretError,
   RateLimitExceededError,
   redactCanvasFixture,
@@ -19,6 +20,12 @@ import { temporaryDirectory } from "./helpers/tempDir.js"
 afterEach(() => vi.useRealTimers())
 
 describe("CanvasHttpClient", () => {
+  it("gives actionable guidance when the configured environment token is missing", () => {
+    expect(() => {
+      throw new CanvasTokenUnavailableError("SCHOOL_CANVAS_TOKEN")
+    }).toThrow("Set SCHOOL_CANVAS_TOKEN or follow docs/auth-runbook.md")
+  })
+
   it("paginates a three-page Link chain in order and sends the bearer token on every page", async () => {
     // Given: three Canvas pages linked by RFC 5988 next relations.
     const requestedUrls: string[] = []

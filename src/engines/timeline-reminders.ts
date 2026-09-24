@@ -43,10 +43,20 @@ export async function writeDueSoonReminders(input: DueSoonReminderInput): Promis
 }
 
 export async function notifyWithOsascript(title: string, message: string): Promise<void> {
-  await executeFile("osascript", [
-    "-e",
-    `display notification ${appleScriptString(message)} with title ${appleScriptString(title)}`,
-  ])
+  // Desktop notifications are a macOS convenience, not a prerequisite for
+  // sync, auth alerts, or their durable vault records. In particular, do not
+  // let a missing AppleScript runtime mask the original operation result.
+  if (process.platform !== "darwin") return
+  try {
+    await executeFile("osascript", [
+      "-e",
+      `display notification ${appleScriptString(message)} with title ${appleScriptString(title)}`,
+    ])
+  } catch {
+    // Notifications are best-effort: the durable alert/reminder was already
+    // written to the vault, so OS notification failures must not fail sync.
+    console.warn("Could not display macOS notification; check the durable vault alert instead.")
+  }
 }
 
 function dueSoonReminder(

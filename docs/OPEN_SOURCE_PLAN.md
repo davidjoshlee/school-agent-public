@@ -18,8 +18,8 @@ This checklist tracks the clean-history public source release ([tracking issue #
 - [x] Perform a final repository and package audit for credentials, signed URLs, personal identifiers, local paths, and course material. Report findings by path only; do not copy sensitive values into issues or logs.
 - [x] Confirm the public history is clean and contains only the audited export.
 - [x] Review the generated package file list before publishing or attaching an archive.
-- [ ] Activate the Linux/macOS CI workflow ([issue #1](https://github.com/davidjoshlee/school-agent-public/issues/1)). GitHub rejected workflow creation because the authenticated token lacks `workflow` scope. The inert [workflow template](ci-workflow.example.yml) is ready for a maintainer with that permission to install.
-- [x] Verify an anonymous public clone, fresh dependency installation, build, and packaged setup/doctor workflow on macOS with Node.js 24. Linux and Node.js 22 matrix verification remain pending CI activation.
+- [ ] Confirm the pushed Linux/macOS CI workflow ([issue #1](https://github.com/davidjoshlee/school-agent-public/issues/1)) passes all four Node.js 22/24 matrix jobs.
+- [ ] After changing repository visibility, verify an anonymous public clone, fresh dependency installation, build, and packaged setup/doctor workflow. Local package smoke has passed on macOS with Node.js 24; public-clone access cannot be verified while the repository is private.
 
 ## Acceptance after publication
 

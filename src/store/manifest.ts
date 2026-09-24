@@ -37,6 +37,7 @@ export async function buildCourseManifest(input: ManifestBuildInput): Promise<st
     input.activeAssignmentIds === undefined ? undefined : new Set(input.activeAssignmentIds)
   const paths = (await markdownFiles(input.courseRoot))
     .filter((path) => path !== input.indexPath)
+    .filter((path) => path !== join(input.courseRoot, vaultLayout.home))
     .filter((path) => !path.endsWith(vaultLayout.feedback))
     .filter((path) => !path.endsWith(`.summary${vaultLayout.markdownExtension}`))
     .sort()
@@ -99,8 +100,30 @@ async function markdownFiles(directory: string): Promise<readonly string[]> {
 }
 
 function titleFromPath(path: string): string {
-  const slug = basename(path, vaultLayout.markdownExtension).replace(/^\d+-/, "")
+  const parts = path.split("/")
+  const filename = basename(path, vaultLayout.markdownExtension)
+  if (filename === basename(vaultLayout.prompt, vaultLayout.markdownExtension)) {
+    const assignmentsIndex = parts.findIndex(
+      (part) => part === vaultLayout.assignmentsDirectory || part === vaultLayout.assignments,
+    )
+    const assignmentDirectory = assignmentsIndex < 0 ? undefined : parts[assignmentsIndex + 1]
+    if (assignmentDirectory !== undefined) {
+      return titleFromSegment(
+        assignmentDirectory
+          .replace(/^\d{4}-\d{2}-\d{2}\s+-\s+/, "")
+          .replace(/^Undated\s+-\s+/i, "")
+          .replace(/^Assignment\s+-\s+/i, ""),
+      )
+    }
+  }
+  const slug = filename.replace(/^\d+-/, "")
   const title = slug.replaceAll("-", " ")
+  const first = title[0]
+  return first === undefined ? title : `${first.toUpperCase()}${title.slice(1)}`
+}
+
+function titleFromSegment(segment: string): string {
+  const title = segment.replaceAll("-", " ").replace(/\s+/g, " ").trim()
   const first = title[0]
   return first === undefined ? title : `${first.toUpperCase()}${title.slice(1)}`
 }

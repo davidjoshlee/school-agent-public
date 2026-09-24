@@ -4,6 +4,7 @@ import { basename, join, relative } from "node:path"
 import { z } from "zod"
 
 import type { SchoolConfig } from "../config/index.js"
+import { slugify, vaultLayout } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault.js"
 import { readOptional } from "../util/fs.js"
 import { parseAssignmentProvenance, withoutAssignmentProvenance } from "./assignment-provenance.js"
@@ -116,12 +117,13 @@ async function renderDraftComparison(input: {
   const provenance = parseAssignmentProvenance(draft)
   const content = withoutAssignmentProvenance(draft)
   input.artifacts.push({ label: `draft: ${provenance.assignment.slug}` })
-  const feedbackPath = join(
+  const feedbackPaths = await assignmentFeedbackPaths(
     input.snapshotRoot,
-    "assignments",
-    `${provenance.assignment.slug}.feedback.md`,
+    provenance.assignment.slug,
+    provenance.assignment.title,
+    provenance.assignment.canvas_id,
   )
-  const groundTruth = await rubricGroundTruth(feedbackPath)
+  const groundTruth = await rubricGroundTruth(feedbackPaths)
   switch (groundTruth.kind) {
     case "missing":
       return [
@@ -147,9 +149,17 @@ async function renderDraftComparison(input: {
   }
 }
 
-async function rubricGroundTruth(path: string): Promise<GroundTruth> {
-  const source = await readOptional(path)
-  if (source === null) return { kind: "missing" }
+async function rubricGroundTruth(paths: readonly string[]): Promise<GroundTruth> {
+  let path: string | undefined
+  let source: string | null = null
+  for (const candidate of paths) {
+    source = await readOptional(candidate)
+    if (source !== null) {
+      path = candidate
+      break
+    }
+  }
+  if (source === null || path === undefined) return { kind: "missing" }
   const content = parseVaultDocument(source, path).content
   const match = /Rubric assessment:\s*```json\s*([\s\S]*?)\s*```/.exec(content)
   if (match?.[1] === undefined) return { kind: "rubric", criteria: [] }
@@ -163,6 +173,58 @@ async function rubricGroundTruth(path: string): Promise<GroundTruth> {
       `Invalid rubric assessment at ${path}: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
+}
+
+async function assignmentFeedbackPaths(
+  courseRoot: string,
+  assignmentSlug: string,
+  assignmentTitle: string,
+  assignmentCanvasId: string,
+): Promise<readonly string[]> {
+  const assignmentsRoot = join(courseRoot, vaultLayout.assignmentsDirectory)
+  const matchingFolders: string[] = []
+  try {
+    const entries = await readdir(assignmentsRoot, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const title = entry.name
+        .replace(/^\d{4}-\d{2}-\d{2}\s+-\s+/, "")
+        .replace(/^Undated\s+-\s+/i, "")
+      if (
+        slugify(title, "") === assignmentSlug ||
+        slugify(assignmentTitle, "") === slugify(title, "")
+      ) {
+        matchingFolders.push(join(assignmentsRoot, entry.name, vaultLayout.feedbackFile))
+      }
+    }
+  } catch (error: unknown) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error
+  }
+  const withMatchingIdentity: string[] = []
+  for (const path of matchingFolders) {
+    const source = await readOptional(path)
+    if (source === null) continue
+    try {
+      const parsed = parseVaultDocument(source, path)
+      if (parsed.frontmatter.canvas_id === `${assignmentCanvasId}-feedback`) {
+        withMatchingIdentity.push(path)
+      }
+    } catch {
+      // A malformed feedback document is not a safe ground-truth source.
+    }
+  }
+  if (withMatchingIdentity.length === 1) return withMatchingIdentity
+  if (withMatchingIdentity.length > 1) return []
+  // When older feedback lacks the expected identity suffix, accept a unique
+  // title match only; duplicate titles are ambiguous and yield no ground truth.
+  if (matchingFolders.length === 1) return matchingFolders
+  if (matchingFolders.length > 1) return []
+
+  // Preserve v1 flat feedback and the transitional flat v2 compatibility path.
+  return [
+    join(assignmentsRoot, `${assignmentSlug}${vaultLayout.feedback}`),
+    join(courseRoot, vaultLayout.assignments, `${assignmentSlug}${vaultLayout.feedback}`),
+  ]
 }
 
 const nonCourseContentFiles = new Set(["_index.md", "comparison.md", "scorecard.md"])

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest"
 import { syncCanvas } from "../src/canvas/sync.js"
 import { parseManifest } from "../src/engines/retrieve-files.js"
 import { createSchoolIndex } from "../src/store/db.js"
+import { coursePaths } from "../src/store/paths.js"
 import { parseVaultDocument } from "../src/store/vault.js"
 import { installCourseHandlers } from "./helpers/canvasMock.js"
 import { client } from "./helpers/schoolConfig.js"
@@ -64,7 +65,7 @@ describe("Canvas sync course manifest", () => {
 
     try {
       await syncCanvas(input)
-      const indexPath = join(vaultPath, "manifest-101", "_index.md")
+      const indexPath = coursePaths(vaultPath, "MANIFEST-101", "1").index
       const first = await readFile(indexPath, "utf8")
 
       // When: the same course is synchronized again without source changes.
@@ -80,16 +81,16 @@ describe("Canvas sync course manifest", () => {
         createHash("sha256").update("").digest("hex"),
       )
       expect(entries.map((entry) => entry.path)).toEqual([
-        "00-syllabus.md",
-        "assignments/case-memo.md",
-        "modules/01-week-1-11/week-1.md",
-        "modules/01-week-1-41/intro.md",
+        "Assignments/Undated - Case memo/00 Prompt.md",
+        "Other/Intro.md",
+        "Other/Week 1.md",
+        "Resources/Syllabus.md",
       ])
       expect(entries).toContainEqual({
         title: "Case memo",
         type: "assignments",
         dates: "2026-02-18",
-        path: "assignments/case-memo.md",
+        path: "Assignments/Undated - Case memo/00 Prompt.md",
         tokenEstimate: expect.any(Number),
         restricted: false,
       })
@@ -97,7 +98,7 @@ describe("Canvas sync course manifest", () => {
         title: "Intro",
         type: "modules",
         dates: "unknown",
-        path: "modules/01-week-1-41/intro.md",
+        path: "Other/Intro.md",
         tokenEstimate: expect.any(Number),
         restricted: false,
       })

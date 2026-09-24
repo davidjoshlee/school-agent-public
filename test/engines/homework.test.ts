@@ -14,21 +14,21 @@ function populatedIndex() {
     name: "Finance",
     courseCode: "FIN-101",
     workflowState: "available",
-    vaultPath: "fin-101",
+    vaultPath: "course-1",
   })
   index.upsertCourse({
     canvasId: "2",
     name: "Leadership",
     courseCode: "LEAD-202",
     workflowState: "available",
-    vaultPath: "lead-202",
+    vaultPath: "course-2",
   })
   index.upsertAssignment({
     canvasId: "721",
     courseCanvasId: "1",
     name: "Case memo",
     dueAt: "2026-10-08T17:00:00Z",
-    vaultPath: "fin-101/assignments/case-memo.md",
+    vaultPath: "course-1/Assignments/2026-10-08 - Case memo/00 Prompt.md",
     allDates: [],
   })
   index.upsertAssignment({
@@ -36,7 +36,7 @@ function populatedIndex() {
     courseCanvasId: "2",
     name: "Reflection",
     dueAt: "2026-10-06T17:00:00Z",
-    vaultPath: "lead-202/assignments/reflection.md",
+    vaultPath: "course-2/Assignments/2026-10-06 - Reflection/00 Prompt.md",
     allDates: [],
   })
   index.upsertAssignment({
@@ -44,7 +44,7 @@ function populatedIndex() {
     courseCanvasId: "1",
     name: "Later memo",
     dueAt: "2026-12-01T17:00:00Z",
-    vaultPath: "fin-101/assignments/later-memo.md",
+    vaultPath: "course-1/Assignments/2026-12-01 - Later memo/00 Prompt.md",
     allDates: [],
   })
   return index

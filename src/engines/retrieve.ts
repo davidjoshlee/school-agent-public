@@ -3,13 +3,14 @@
 // fixed sources, truncation, context logging); splitting it would fragment a
 // single accounting invariant (selectionBudget/budgetUsed) across files.
 import { appendFile, mkdir } from "node:fs/promises"
-import { resolve } from "node:path"
+import { join, relative, sep } from "node:path"
 
 import type { SchoolConfig } from "../config/index.js"
 import { modelMappings } from "../models/index.js"
 import { coursePaths, vaultPaths } from "../store/paths.js"
 import {
   parseManifest,
+  readCourseVaultText,
   readVaultText,
   type SummaryRequest,
   selectEntries,
@@ -114,6 +115,30 @@ function truncateContext(context: string, tokenBudget: number): string {
   return `${context.slice(0, prefixLength).trimEnd()}\n${note}`
 }
 
+type VaultTextCandidate = {
+  readonly path: string
+  readonly label: string
+}
+
+type ResolvedVaultText = {
+  readonly source: VaultText
+  readonly label: string
+}
+
+async function firstVaultText(
+  candidates: readonly VaultTextCandidate[],
+): Promise<ResolvedVaultText | null> {
+  for (const candidate of candidates) {
+    const source = await readVaultText(candidate.path)
+    if (source !== null) return { source, label: candidate.label }
+  }
+  return null
+}
+
+function relativePath(root: string, path: string): string {
+  return relative(root, path).split(sep).join("/")
+}
+
 async function appendContextLog(
   input: AssembleCourseContextInput,
   sources: readonly ContextSource[],
@@ -145,11 +170,18 @@ export async function assembleCourseContext(
   input: AssembleCourseContextInput,
 ): Promise<AssembledCourseContext> {
   const paths = coursePaths(input.vaultRoot, input.course.code, input.course.canvasId)
-  const manifest = await readVaultText(paths.index)
+  const manifestCandidate = await firstVaultText([
+    { path: paths.home, label: relativePath(paths.root, paths.home) },
+    { path: paths.index, label: relativePath(paths.root, paths.index) },
+    { path: paths.legacy.index, label: relativePath(paths.root, paths.legacy.index) },
+  ])
+  const manifest = manifestCandidate?.source ?? null
   if (manifest === null) {
-    throw new RetrievalError(`Course manifest is missing: ${paths.index}`)
+    throw new RetrievalError(`Course manifest is missing: ${paths.home}`)
   }
-  const sources: ContextSource[] = [{ path: "_index.md", tier: manifestTier }]
+  const sources: ContextSource[] = [
+    { path: manifestCandidate?.label ?? relativePath(paths.root, paths.home), tier: manifestTier },
+  ]
   const selected: {
     path: string
     content: string
@@ -178,7 +210,7 @@ export async function assembleCourseContext(
     if (includedPaths.has(rel)) {
       continue
     }
-    const source = await readVaultText(resolve(paths.root, rel))
+    const source = await readCourseVaultText(paths.root, rel)
     if (source === null || !isAllowed(source.restricted, input.config)) {
       continue
     }
@@ -246,7 +278,7 @@ export async function assembleCourseContext(
     if (budgetUsed + entry.tokenEstimate > selectionBudget) {
       continue
     }
-    const source = await readVaultText(resolve(paths.root, path))
+    const source = await readCourseVaultText(paths.root, path)
     if (source === null || !isAllowed(entry.restricted || source.restricted, input.config)) {
       continue
     }
@@ -286,15 +318,47 @@ export async function assembleCourseContext(
 
   sources.push(...selected.map(({ path, tier }) => ({ path, tier })))
   const fixed = await Promise.all([
-    readVaultText(paths.syllabus),
-    readVaultText(paths.playbook),
-    readVaultText(resolve(paths.guidance, "prep-guidance.md")),
+    firstVaultText([
+      { path: paths.syllabus, label: relativePath(paths.root, paths.syllabus) },
+      { path: paths.legacy.syllabus, label: relativePath(paths.root, paths.legacy.syllabus) },
+    ]),
+    firstVaultText([
+      { path: paths.playbook, label: relativePath(paths.root, paths.playbook) },
+      { path: paths.legacy.playbook, label: relativePath(paths.root, paths.legacy.playbook) },
+    ]),
+    firstVaultText([
+      {
+        path: join(paths.guidance, "prep-guidance.md"),
+        label: relativePath(paths.root, join(paths.guidance, "prep-guidance.md")),
+      },
+      {
+        path: join(paths.legacy.guidance, "prep-guidance.md"),
+        label: relativePath(paths.root, join(paths.legacy.guidance, "prep-guidance.md")),
+      },
+    ]),
   ])
-  const [syllabus, playbook, guidance] = fixed
+  const [syllabusCandidate, playbookCandidate, guidanceCandidate] = fixed
+  const syllabus = syllabusCandidate?.source ?? null
+  const playbook = playbookCandidate?.source ?? null
+  const guidance = guidanceCandidate?.source ?? null
   const fixedSources: readonly FixedSource[] = [
-    { label: "Syllabus excerpt", path: "00-syllabus.md", source: syllabus },
-    { label: "Course playbook", path: "_meta/course-playbook.md", source: playbook },
-    { label: "Guidance", path: "guidance/prep-guidance.md", source: guidance },
+    {
+      label: "Syllabus excerpt",
+      path: syllabusCandidate?.label ?? relativePath(paths.root, paths.syllabus),
+      source: syllabus,
+    },
+    {
+      label: "Course playbook",
+      path: playbookCandidate?.label ?? relativePath(paths.root, paths.playbook),
+      source: playbook,
+    },
+    {
+      label: "Guidance",
+      path:
+        guidanceCandidate?.label ??
+        relativePath(paths.root, join(paths.guidance, "prep-guidance.md")),
+      source: guidance,
+    },
   ] as const
   const usableFixed = fixedSources.filter(
     (item): item is FixedSource & { readonly source: VaultText } =>

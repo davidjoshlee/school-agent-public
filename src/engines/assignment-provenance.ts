@@ -11,6 +11,7 @@ export const assignmentProvenanceSchema = z.strictObject({
     title: z.string().min(1),
     slug: z.string().min(1),
     canvas_url: z.url(),
+    due_at: z.string().nullable().optional(),
     group_category_id: z.string().min(1).nullable(),
   }),
   ai_policy: z.enum(["allowed", "prohibited"]),

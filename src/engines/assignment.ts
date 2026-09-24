@@ -8,11 +8,12 @@ import type { SchoolConfig } from "../config/index.js"
 import { assertUnderSpendCap, recordModelUsage } from "../models/cost.js"
 import type { SchoolIndex } from "../store/db.js"
 import {
+  assignmentPaths,
   courseDocumentPath,
   coursePaths,
+  humanPathSegment,
   slugify,
   vaultDocumentKinds,
-  vaultLayout,
   xlsxSiblingPath,
 } from "../store/paths.js"
 import { parseVaultDocument, VaultWriter, vaultSources, vaultStatuses } from "../store/vault.js"
@@ -28,6 +29,7 @@ import {
   withoutAssignmentProvenance,
 } from "./assignment-provenance.js"
 import { selfReviewDraft, withCorrectnessCheck } from "./assignment-review.js"
+import { extractSubmissionContent } from "./assignment-submission.js"
 import {
   type Deliverable,
   type DeliverableSource,
@@ -61,6 +63,7 @@ type AssignmentArtifact = {
   readonly canvasId: string
   readonly title: string
   readonly canvasUrl: string
+  readonly dueAt?: string | null
   readonly groupCategoryId?: string | number | null
 }
 type AssignmentContextInput = {
@@ -121,14 +124,14 @@ export type ExternalSourceReference = { readonly url: string; readonly text: str
 
 const anchorPattern = /<a\b[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gis
 const bareUrlPattern = /https?:\/\/[^\s"'<>)]+/g
-// urldefense.com rewrites external links as `.../v3/__<real-url>__;<garbage>`;
-// unwrap it so the surfaced list names the real (e.g. hbsp.harvard.edu) host,
-// not the forwarding wrapper.
+// Some email link protection services wrap external links as
+// `.../v3/__<real-url>__;<garbage>`; unwrap these so the surfaced list names
+// the original host, not the forwarding wrapper.
 const urldefenseWrap = /urldefense\.com\/v\d+\/__(https?:\/\/[^_]+)__/i
 
 /**
  * External (non-Canvas) links referenced by an assignment's own description,
- * e.g. an `hbsp.harvard.edu` exhibit-data link the vault never syncs. Used to
+ * e.g. an external exhibit-data link the vault never syncs. Used to
  * banner the draft prompt with sources the model must not fabricate around.
  * Canvas `/files/<id>` links are handled separately by sync — not surfaced here.
  */
@@ -315,8 +318,12 @@ export async function discussAssignment(
   }
   const paths = coursePaths(input.vaultRoot, course.code, course.canvasId)
   const slug = assignmentSlug(input.assignment)
-  const path = join(paths.drafts, `${slug}.discuss.md`)
-  await mkdir(paths.drafts, { recursive: true })
+  const drafts = assignmentPaths(paths, {
+    title: input.assignment.title,
+    ...(input.assignment.dueAt === undefined ? {} : { dueAt: input.assignment.dueAt }),
+  }).drafts
+  const path = join(drafts, `${slug}.discuss.md`)
+  await mkdir(drafts, { recursive: true })
   await appendFile(
     path,
     `## ${new Date().toISOString()}\n\n${input.message}\n\n${result.text.trim()}\n\n`,
@@ -348,7 +355,8 @@ export async function approveAssignment(
     }
   }
   const assignment = assignmentFrom(located.provenance)
-  const content = parseVaultDocument(await readFile(located.path, "utf8"), located.path).content
+  const draftBody = parseVaultDocument(await readFile(located.path, "utf8"), located.path).content
+  const content = extractSubmissionContent(draftBody)
   const result = await new VaultWriter({
     root: input.vaultRoot,
     gitInit: input.config.vault.gitInit,
@@ -359,6 +367,10 @@ export async function approveAssignment(
     canvasId: assignment.canvasId,
     canvasUrl: assignment.canvasUrl,
     content,
+    assignment: {
+      title: assignment.title,
+      ...(assignment.dueAt === undefined ? {} : { dueAt: assignment.dueAt }),
+    },
     source: vaultSources.agent,
     status: vaultStatuses.final,
     model: located.provenance.model_ids.draft,
@@ -451,11 +463,17 @@ async function readAssignmentDoc(
   input: Omit<AssignmentContextInput, "course"> & { readonly course: ResolvedCourse },
 ): Promise<string | null> {
   try {
-    const assignmentDocPath = courseDocumentPath(paths, {
-      kind: vaultDocumentKinds.assignment,
-      title: input.assignment.title,
-      canvasId: input.assignment.canvasId,
-    })
+    const compatibilityPath = join(paths.assignments, `${assignmentSlug(input.assignment)}.md`)
+    const compatibility = await readOptional(compatibilityPath)
+    if (compatibility !== null) {
+      return parseVaultDocument(compatibility, compatibilityPath).content
+    }
+    const assignmentDocPath = await findCourseDocument(
+      paths.root,
+      vaultDocumentKinds.assignment,
+      input.assignment.canvasId,
+    )
+    if (assignmentDocPath === null) return null
     return parseVaultDocument(await readFile(assignmentDocPath, "utf8"), assignmentDocPath).content
   } catch {
     return null
@@ -477,13 +495,8 @@ async function assignmentLinkedFilePaths(
     if (linkedIds.size === 0) {
       return []
     }
-    const entries = await readDirectory(paths.files)
     const byCanvasId = new Map<string, string>()
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
-        continue
-      }
-      const filePath = join(paths.files, entry.name)
+    for (const filePath of await markdownFiles(paths.root)) {
       try {
         const parsed = parseVaultDocument(await readFile(filePath, "utf8"), filePath)
         if (linkedIds.has(String(parsed.frontmatter.canvas_id))) {
@@ -554,7 +567,11 @@ async function writeDraft(input: {
   readonly text: string
 }): Promise<AssignmentDraftResult> {
   const paths = coursePaths(input.vaultRoot, input.course.code, input.course.canvasId)
-  const version = await draftVersion(paths.drafts, assignmentSlug(input.assignment))
+  const drafts = assignmentPaths(paths, {
+    title: input.assignment.title,
+    ...(input.assignment.dueAt === undefined ? {} : { dueAt: input.assignment.dueAt }),
+  }).drafts
+  const version = await draftVersion(drafts, input.assignment)
   const provenance = assignmentProvenanceSchema.parse({
     course: {
       code: input.course.code,
@@ -566,6 +583,7 @@ async function writeDraft(input: {
       title: input.assignment.title,
       slug: assignmentSlug(input.assignment),
       canvas_url: input.assignment.canvasUrl,
+      due_at: input.assignment.dueAt ?? null,
       group_category_id:
         input.assignment.groupCategoryId === null || input.assignment.groupCategoryId === undefined
           ? null
@@ -601,6 +619,10 @@ async function writeDraft(input: {
     canvasId: input.assignment.canvasId,
     canvasUrl: input.assignment.canvasUrl,
     content,
+    assignment: {
+      title: input.assignment.title,
+      ...(input.assignment.dueAt === undefined ? {} : { dueAt: input.assignment.dueAt }),
+    },
     source: vaultSources.agent,
     status: vaultStatuses.draft,
     model: input.config.models.functions.assignmentDraft,
@@ -837,18 +859,15 @@ async function findDraft(vaultRoot: string, runId: string): Promise<LocatedDraft
     if (!course.isDirectory() || course.name.startsWith(".")) {
       continue
     }
-    const drafts = join(vaultRoot, course.name, vaultLayout.drafts)
-    const entries = await readDirectory(drafts)
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name.endsWith(".discuss.md")) {
-        continue
-      }
-      const path = join(drafts, entry.name)
-      const provenance = parseAssignmentProvenance(
-        parseVaultDocument(await readFile(path, "utf8"), path).content,
-      )
-      if (provenance.run_id === runId) {
-        candidates.push({ path, provenance })
+    for (const path of await markdownFiles(join(vaultRoot, course.name))) {
+      if (path.endsWith(".discuss.md")) continue
+      try {
+        const parsed = parseVaultDocument(await readFile(path, "utf8"), path)
+        if (parsed.frontmatter.type !== vaultDocumentKinds.draft) continue
+        const provenance = parseAssignmentProvenance(parsed.content)
+        if (provenance.run_id === runId) candidates.push({ path, provenance })
+      } catch {
+        // Non-draft Markdown and hand-authored notes are irrelevant here.
       }
     }
   }
@@ -860,14 +879,15 @@ async function findDraft(vaultRoot: string, runId: string): Promise<LocatedDraft
   return latest
 }
 
-async function draftVersion(directory: string, slug: string): Promise<number> {
+async function draftVersion(directory: string, assignment: AssignmentArtifact): Promise<number> {
   const entries = await readDirectory(directory)
-  const hasBase = entries.some((entry) => entry.name === `${slug}.md`)
+  const base = humanPathSegment(assignment.title, `Untitled ${vaultDocumentKinds.draft}`)
+  const hasBase = entries.some((entry) => entry.name === `${base}.md`)
   if (!hasBase) {
     return 1
   }
   const versions = entries.flatMap((entry) => {
-    const match = new RegExp(`^${escapeRegExp(slug)}\\.v(\\d+)\\.md$`).exec(entry.name)
+    const match = new RegExp(`^${escapeRegExp(base)}\\.v(\\d+)\\.md$`).exec(entry.name)
     return match === null ? [] : [Number.parseInt(match[1] ?? "0", 10)]
   })
   return Math.max(1, ...versions) + 1
@@ -878,8 +898,39 @@ function assignmentFrom(provenance: AssignmentProvenance): AssignmentArtifact {
     canvasId: provenance.assignment.canvas_id,
     title: provenance.assignment.title,
     canvasUrl: provenance.assignment.canvas_url,
+    dueAt: provenance.assignment.due_at ?? null,
     groupCategoryId: provenance.assignment.group_category_id,
   }
+}
+
+async function findCourseDocument(
+  courseRoot: string,
+  kind: string,
+  canvasId: string,
+): Promise<string | null> {
+  for (const path of await markdownFiles(courseRoot)) {
+    try {
+      const parsed = parseVaultDocument(await readFile(path, "utf8"), path)
+      if (parsed.frontmatter.type === kind && parsed.frontmatter.canvas_id === String(canvasId)) {
+        return path
+      }
+    } catch {
+      // Ignore generated navigation and hand-authored Markdown without vault frontmatter.
+    }
+  }
+  return null
+}
+
+async function markdownFiles(directory: string): Promise<readonly string[]> {
+  const entries = await readDirectory(directory)
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) return markdownFiles(path)
+      return Promise.resolve(entry.isFile() && entry.name.endsWith(".md") ? [path] : [])
+    }),
+  )
+  return nested.flat()
 }
 
 function assignmentSlug(assignment: AssignmentArtifact): string {

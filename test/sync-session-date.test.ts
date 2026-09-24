@@ -33,6 +33,14 @@ describe("parseSessionDate", () => {
 })
 
 describe("resolveCourseYear", () => {
+  it("falls back to the year encoded in a synthetic term-prefixed course code", () => {
+    // Canvas course payloads do not always expose term/start dates, especially
+    // before a course is fully published. F26 still gives a deterministic year
+    // for module titles such as "Session 1 (September 22)".
+    const course = { course_code: "F26-DEMO-101" }
+    expect(resolveCourseYear(course, [])).toBe(2026)
+  })
+
   it("prefers the course term start_at", () => {
     expect(
       resolveCourseYear({ term: { start_at: "2025-09-20T00:00:00Z" } }, ["2026-01-05T00:00:00Z"]),

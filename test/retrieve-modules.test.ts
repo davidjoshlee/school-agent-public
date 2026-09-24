@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { dirname, join, relative } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
@@ -9,13 +9,13 @@ import {
   selectModulesForAssignment,
   selectModulesForPeriod,
 } from "../src/engines/retrieve-selection.js"
-import { coursePaths, slugify, vaultPaths } from "../src/store/paths.js"
+import { assignmentPaths, coursePaths, slugify, vaultPaths } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { realSchoolModels, schoolConfig } from "./helpers/schoolConfig.js"
 import { temporaryDirectory } from "./helpers/tempDir.js"
 
-const course = { code: "ACCT 213", canvasId: "course-9" } as const
+const course = { code: "DEMO 213", canvasId: "course-9" } as const
 
 function config(): ReturnType<typeof schoolConfig> {
   return schoolConfig({
@@ -32,6 +32,7 @@ async function put(
   canvasId: string,
   content: string,
   dates: Readonly<Record<string, string>> = {},
+  type = "fixture",
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
@@ -40,7 +41,7 @@ async function put(
       createVaultFrontmatter({
         canvasId,
         canvasUrl: `https://canvas.example.invalid/${canvasId}`,
-        type: "fixture",
+        type,
         content,
         dates,
         source: "sync",
@@ -61,6 +62,15 @@ const session9HomeworkTitle = "Session 9 Homework"
 const session9SlidesTitle = "Session 9 Slides"
 const session6HomeworkTitle = "Session 6 Homework"
 
+function assignmentRelative(title: string, dueAt?: string): string {
+  const paths = coursePaths("/fixture", course.code, course.canvasId)
+  return relative(paths.root, assignmentPaths(paths, { title, dueAt }).prompt).split("\\").join("/")
+}
+
+function fileRelative(title: string): string {
+  return `Resources/Files/${slugify(title, "slides")}.md`
+}
+
 /**
  * A three-session vault (7, 8, 9) plus an older-form session 6 module,
  * shaped like real sync output: one module-root doc per session (renderModule
@@ -70,9 +80,14 @@ const session6HomeworkTitle = "Session 6 Homework"
 async function threeSessionVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-retrieve-modules-")
   const paths = coursePaths(root, course.code, course.canvasId)
+  const assignmentPath = (title: string): string => assignmentPaths(paths, { title }).prompt
+  const filePath = (title: string): string =>
+    join(paths.resources, "Files", `${slugify(title, "slides")}.md`)
+  const modulePath = (number: number, label: string): string =>
+    join(paths.root, `Week ${String(number).padStart(2, "0")} - ${label}`, "00 Overview.md")
 
   await put(
-    join(paths.modules, "06-session-6-601m", "session-6.md"),
+    modulePath(6, "Oct 02"),
     "601m",
     [
       "Session 6",
@@ -80,15 +95,19 @@ async function threeSessionVault(): Promise<string> {
       `- Assignment: ${session6HomeworkTitle}`,
       `- File: ${slugify(session6HomeworkTitle, "slides")}`,
     ].join("\n"),
+    {},
+    "module",
   )
   await put(
-    join(paths.assignments, `${slugify(session6HomeworkTitle, "untitled")}.md`),
+    assignmentPath(session6HomeworkTitle),
     "601-old",
     "Session 6 homework prompt.",
+    {},
+    "assignments",
   )
 
   await put(
-    join(paths.modules, "07-session-7-701", "session-7.md"),
+    modulePath(7, "Oct 09"),
     "701",
     [
       "Session 7",
@@ -97,20 +116,13 @@ async function threeSessionVault(): Promise<string> {
       `- Assignment: ${session7HomeworkTitle} (canvas_id: 601)`,
     ].join("\n"),
     { unlock_at: "2025-10-09T00:00:00.000Z" },
+    "module",
   )
-  await put(
-    join(paths.files, `${slugify(session7SlidesTitle, "slides")}.md`),
-    "501",
-    "Slides 7 body.",
-  )
-  await put(
-    join(paths.assignments, `${slugify(session7HomeworkTitle, "untitled")}.md`),
-    "601",
-    "Homework 7 prompt.",
-  )
+  await put(filePath(session7SlidesTitle), "501", "Slides 7 body.", {}, "files")
+  await put(assignmentPath(session7HomeworkTitle), "601", "Homework 7 prompt.", {}, "assignments")
 
   await put(
-    join(paths.modules, "08-session-8-801", "session-8.md"),
+    modulePath(8, "Oct 16"),
     "801",
     [
       "Session 8",
@@ -119,20 +131,19 @@ async function threeSessionVault(): Promise<string> {
       `- Assignment: ${session8AssignmentTitle} (canvas_id: 602)`,
     ].join("\n"),
     { unlock_at: "2025-10-16T00:00:00.000Z" },
+    "module",
   )
+  await put(filePath(session8SlidesTitle), "502", "Slides 8 body.", {}, "files")
   await put(
-    join(paths.files, `${slugify(session8SlidesTitle, "slides")}.md`),
-    "502",
-    "Slides 8 body.",
-  )
-  await put(
-    join(paths.assignments, `${slugify(session8AssignmentTitle, "untitled")}.md`),
+    assignmentPath(session8AssignmentTitle),
     "602",
     "ExampleCo assignment prompt.",
+    {},
+    "assignments",
   )
 
   await put(
-    join(paths.modules, "09-session-9-901", "session-9.md"),
+    modulePath(9, "Oct 23"),
     "901",
     [
       "Session 9",
@@ -141,17 +152,10 @@ async function threeSessionVault(): Promise<string> {
       `- Assignment: ${session9HomeworkTitle} (canvas_id: 603)`,
     ].join("\n"),
     { unlock_at: "2025-10-23T00:00:00.000Z" },
+    "module",
   )
-  await put(
-    join(paths.files, `${slugify(session9SlidesTitle, "slides")}.md`),
-    "503",
-    "Slides 9 body.",
-  )
-  await put(
-    join(paths.assignments, `${slugify(session9HomeworkTitle, "untitled")}.md`),
-    "603",
-    "Homework 9 prompt.",
-  )
+  await put(filePath(session9SlidesTitle), "503", "Slides 9 body.", {}, "files")
+  await put(assignmentPath(session9HomeworkTitle), "603", "Homework 9 prompt.", {}, "assignments")
 
   return root
 }
@@ -176,13 +180,13 @@ describe("loadCourseModules", () => {
           type: "File",
           title: session8SlidesTitle,
           canvasId: "502",
-          resolvedPath: `files/${slugify(session8SlidesTitle, "slides")}.md`,
+          resolvedPath: fileRelative(session8SlidesTitle),
         },
         {
           type: "Assignment",
           title: session8AssignmentTitle,
           canvasId: "602",
-          resolvedPath: `assignments/${slugify(session8AssignmentTitle, "untitled")}.md`,
+          resolvedPath: assignmentRelative(session8AssignmentTitle),
         },
       ])
 
@@ -191,9 +195,7 @@ describe("loadCourseModules", () => {
       // vault filename sync would have written.
       const session6 = modules.find((module) => module.canvasId === "601m")
       const homework = session6?.items.find((item) => item.type === "Assignment")
-      expect(homework?.resolvedPath).toBe(
-        `assignments/${slugify(session6HomeworkTitle, "untitled")}.md`,
-      )
+      expect(homework?.resolvedPath).toBe(assignmentRelative(session6HomeworkTitle))
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -216,16 +218,14 @@ describe("selectModulesForAssignment", () => {
       expect(selection.moduleCanvasIds.sort()).toEqual(["701", "801"])
       expect(selection.paths).toEqual(
         expect.arrayContaining([
-          `assignments/${slugify(session8AssignmentTitle, "untitled")}.md`,
-          `files/${slugify(session8SlidesTitle, "slides")}.md`,
-          `assignments/${slugify(session7HomeworkTitle, "untitled")}.md`,
-          `files/${slugify(session7SlidesTitle, "slides")}.md`,
+          assignmentRelative(session8AssignmentTitle),
+          fileRelative(session8SlidesTitle),
+          assignmentRelative(session7HomeworkTitle),
+          fileRelative(session7SlidesTitle),
         ]),
       )
-      expect(selection.paths).not.toContain(
-        `assignments/${slugify(session9HomeworkTitle, "untitled")}.md`,
-      )
-      expect(selection.paths).not.toContain(`files/${slugify(session9SlidesTitle, "slides")}.md`)
+      expect(selection.paths).not.toContain(assignmentRelative(session9HomeworkTitle))
+      expect(selection.paths).not.toContain(fileRelative(session9SlidesTitle))
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -251,14 +251,14 @@ describe("selectModulesForAssignment with module_canvas_id reverse links", () =>
     const root = await threeSessionVault()
     try {
       const paths = coursePaths(root, course.code, course.canvasId)
-      await mkdir(dirname(join(paths.files, "manual-exhibit.md")), { recursive: true })
+      await mkdir(dirname(join(paths.resources, "Files", "manual-exhibit.md")), { recursive: true })
       await writeFile(
-        join(paths.files, "manual-exhibit.md"),
+        join(paths.resources, "Files", "manual-exhibit.md"),
         renderVaultDocument(
           createVaultFrontmatter({
             canvasId: "manual-exhibit",
             canvasUrl: "https://canvas.example.invalid/manual-exhibit",
-            type: "fixture",
+            type: "files",
             content: "Manually ingested exhibit body.",
             source: "user",
             status: "final",
@@ -278,7 +278,7 @@ describe("selectModulesForAssignment with module_canvas_id reverse links", () =>
       if (selectedForSession8.mode !== "module") {
         throw new Error("Expected module selection to succeed")
       }
-      expect(selectedForSession8.paths).toContain("files/manual-exhibit.md")
+      expect(selectedForSession8.paths).toContain("Resources/Files/manual-exhibit.md")
 
       const selectedForSession9 = await selectModulesForPeriod(courseRoot, {
         kind: "session",
@@ -287,7 +287,7 @@ describe("selectModulesForAssignment with module_canvas_id reverse links", () =>
       if (selectedForSession9.mode !== "module") {
         throw new Error("Expected module selection to succeed")
       }
-      expect(selectedForSession9.paths).not.toContain("files/manual-exhibit.md")
+      expect(selectedForSession9.paths).not.toContain("Resources/Files/manual-exhibit.md")
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -309,13 +309,11 @@ describe("selectModulesForPeriod", () => {
       expect(selection.moduleCanvasIds).toEqual(["801"])
       expect(selection.paths).toEqual(
         expect.arrayContaining([
-          `files/${slugify(session8SlidesTitle, "slides")}.md`,
-          `assignments/${slugify(session8AssignmentTitle, "untitled")}.md`,
+          fileRelative(session8SlidesTitle),
+          assignmentRelative(session8AssignmentTitle),
         ]),
       )
-      expect(selection.paths).not.toContain(
-        `assignments/${slugify(session7HomeworkTitle, "untitled")}.md`,
-      )
+      expect(selection.paths).not.toContain(assignmentRelative(session7HomeworkTitle))
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -356,15 +354,18 @@ describe("selectModulesForPeriod", () => {
       const session10Title = "Session 10 Homework"
       // A module with no date signal of its own at all.
       await put(
-        join(paths.modules, "10-session-10-1001", "session-10.md"),
+        join(paths.root, "Week 10 - Oct 30", "00 Overview.md"),
         "1001",
         ["Session 10", "", `- Assignment: ${session10Title} (canvas_id: 604)`].join("\n"),
+        {},
+        "module",
       )
       await put(
-        join(paths.assignments, `${slugify(session10Title, "untitled")}.md`),
+        assignmentPaths(paths, { title: session10Title, dueAt: "2025-10-30" }).prompt,
         "604",
         "Homework 10 prompt.",
         { due_at: "2025-10-30T00:00:00.000Z" },
+        "assignments",
       )
 
       const courseRoot = coursePaths(root, course.code, course.canvasId).root
@@ -378,7 +379,7 @@ describe("selectModulesForPeriod", () => {
         )
       }
       expect(selection.moduleCanvasIds).toEqual(["1001"])
-      expect(selection.paths).toContain(`assignments/${slugify(session10Title, "untitled")}.md`)
+      expect(selection.paths).toContain(assignmentRelative(session10Title, "2025-10-30"))
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -399,7 +400,7 @@ describe("assembleCourseContext with module selection", () => {
         [
           "| title | type | dates | path | token estimate |",
           "| --- | --- | --- | --- | --- |",
-          `| Session 9 homework | assignment | | assignments/${slugify(session9HomeworkTitle, "untitled")}.md | 20 |`,
+          `| Session 9 homework | assignment | | ${assignmentRelative(session9HomeworkTitle)} | 20 |`,
         ].join("\n"),
       )
 
@@ -422,13 +423,11 @@ describe("assembleCourseContext with module selection", () => {
 
       expect(result.selected).toEqual(
         expect.arrayContaining([
-          `assignments/${slugify(session8AssignmentTitle, "untitled")}.md`,
-          `files/${slugify(session7SlidesTitle, "slides")}.md`,
+          assignmentRelative(session8AssignmentTitle),
+          fileRelative(session7SlidesTitle),
         ]),
       )
-      expect(result.selected).not.toContain(
-        `assignments/${slugify(session9HomeworkTitle, "untitled")}.md`,
-      )
+      expect(result.selected).not.toContain(assignmentRelative(session9HomeworkTitle))
 
       const log = (await readFile(vaultPaths(root).metadata.contextLog, "utf8")).trim().split("\n")
       const entry = JSON.parse(log.at(-1) ?? "{}")
@@ -449,7 +448,7 @@ describe("assembleCourseContext with module selection", () => {
         [
           "| title | type | dates | path | token estimate |",
           "| --- | --- | --- | --- | --- |",
-          `| Session 9 homework | assignment | | assignments/${slugify(session9HomeworkTitle, "untitled")}.md | 20 |`,
+          `| Session 9 homework | assignment | | ${assignmentRelative(session9HomeworkTitle)} | 20 |`,
         ].join("\n"),
       )
       const selection = await selectModulesForAssignment(paths.root, {
@@ -469,9 +468,7 @@ describe("assembleCourseContext with module selection", () => {
         selection,
       })
 
-      expect(result.selected).toEqual([
-        `assignments/${slugify(session9HomeworkTitle, "untitled")}.md`,
-      ])
+      expect(result.selected).toEqual([assignmentRelative(session9HomeworkTitle)])
       const log = (await readFile(vaultPaths(root).metadata.contextLog, "utf8")).trim().split("\n")
       const entry = JSON.parse(log.at(-1) ?? "{}")
       expect(entry.selectionMode).toBe("keyword-fallback")

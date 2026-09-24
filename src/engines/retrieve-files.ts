@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises"
-import { relative, resolve } from "node:path"
+import { join, relative, resolve } from "node:path"
 
+import { vaultLayout } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault.js"
 
 export type ManifestEntry = {
@@ -16,6 +17,8 @@ export type VaultText = {
   readonly content: string
   readonly restricted: boolean
 }
+
+export type ResolvedVaultText = VaultText & { readonly path: string }
 
 export type SummaryRequest = {
   readonly provider: string
@@ -89,6 +92,23 @@ export async function readVaultText(path: string): Promise<VaultText | null> {
   }
 }
 
+/**
+ * Read a manifest artifact while accepting both v1 and v2 path spellings.
+ * Manifests normally contain the exact current path; aliases matter for a
+ * staged/partially migrated vault and for old manifests copied into v2 tests.
+ */
+export async function readCourseVaultText(
+  courseRoot: string,
+  vaultPath: string,
+): Promise<ResolvedVaultText | null> {
+  const relativePath = vaultRelativePath(courseRoot, vaultPath)
+  for (const candidate of coursePathCandidates(relativePath)) {
+    const source = await readVaultText(resolve(courseRoot, candidate))
+    if (source !== null) return { ...source, path: candidate }
+  }
+  return null
+}
+
 export async function readSummary(path: string): Promise<string | null> {
   try {
     return (await readFile(path, "utf8")).trim()
@@ -107,24 +127,45 @@ export async function summaryFor(input: {
   readonly summarize: (request: SummaryRequest) => Promise<string>
 }): Promise<{ readonly path: string; readonly content: string } | null> {
   const path = vaultRelativePath(input.courseRoot, input.entry.path)
-  const fullPath = resolve(input.courseRoot, path)
+  const resolved = await readCourseVaultText(input.courseRoot, path)
+  if (resolved === null) return null
+  const fullPath = resolve(input.courseRoot, resolved.path)
   const sidecarPath = `${fullPath}.summary.md`
   const cached = await readSummary(sidecarPath)
   if (cached !== null) {
     return { path: `${path}.summary.md`, content: cached }
   }
-  const source = await readVaultText(fullPath)
-  if (source === null) {
-    return null
-  }
   const summary = await input.summarize({
     provider: input.model.split("/", 1)[0] ?? "unknown",
     model: input.model,
     path,
-    content: source.content,
+    content: resolved.content,
   })
   await writeFile(sidecarPath, summary, "utf8")
   return { path: `${path}.summary.md`, content: summary }
+}
+
+function coursePathCandidates(path: string): readonly string[] {
+  const [first, ...rest] = path.split("/")
+  if (first === undefined) return [path]
+  const suffix = rest.join("/")
+  const candidates = [path]
+  if (first === vaultLayout.files) {
+    candidates.push(join(vaultLayout.resources, vaultLayout.filesDirectory, suffix))
+  }
+  if (first === vaultLayout.assignments) {
+    candidates.push(join(vaultLayout.assignmentsDirectory, suffix))
+  }
+  if (first === vaultLayout.guidance) {
+    candidates.push(join(vaultLayout.resources, vaultLayout.guidanceDirectory, suffix))
+  }
+  if (first === vaultLayout.prep) {
+    candidates.push(join(vaultLayout.other, vaultLayout.prepDirectory, suffix))
+  }
+  if (path === vaultLayout.syllabus) {
+    candidates.push(join(vaultLayout.resources, vaultLayout.syllabusFile))
+  }
+  return [...new Set(candidates)]
 }
 
 class RetrievalFilesError extends Error {

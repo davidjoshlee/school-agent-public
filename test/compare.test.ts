@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest"
 import type { SchoolConfig } from "../src/config/index.js"
 import { renderAssignmentProvenance } from "../src/engines/assignment-provenance.js"
 import { compareSimulation } from "../src/engines/compare.js"
-import { coursePaths } from "../src/store/paths.js"
+import { coursePaths, slugify, vaultLayout } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { schoolConfig } from "./helpers/schoolConfig.js"
@@ -26,12 +26,17 @@ function config(root: string): SchoolConfig {
   })
 }
 
-function vaultDocument(content: string): string {
+function simulationRunId(asOf = "2025-01-01"): string {
+  const weekKey = `${slugify(course.code, `course-${course.canvasId}`)}-${slugify(course.canvasId, "unknown")}-${asOf}`
+  return join(weekKey, coursePaths("", course.code, course.canvasId).root)
+}
+
+function vaultDocument(content: string, canvasId = "fixture", type = "fixture"): string {
   return renderVaultDocument(
     createVaultFrontmatter({
-      canvasId: "fixture",
+      canvasId,
       canvasUrl: "https://canvas.example.invalid/resource",
-      type: "fixture",
+      type,
       content,
       dates: { created_at: "2025-01-01T00:00:00.000Z" },
       source: "sync",
@@ -68,7 +73,7 @@ async function fixtureVault(withFeedback: boolean): Promise<string> {
   )
   if (withFeedback) {
     await write(
-      join(paths.assignments, "pricing-memo.feedback.md"),
+      join(paths.assignments, "Undated - Pricing memo", "Feedback.md"),
       vaultDocument(
         [
           "Rubric assessment:",
@@ -77,10 +82,13 @@ async function fixtureVault(withFeedback: boolean): Promise<string> {
           JSON.stringify({ "market-analysis": { points: 5 }, evidence: { points: 0 } }),
           "```",
         ].join("\n"),
+        "assignment-1-feedback",
+        "feedback",
       ),
     )
   }
-  const weekRoot = join(root, "_simulations", "strat-101-2025-01-01")
+  const runId = simulationRunId()
+  const weekRoot = join(root, "_simulations", runId)
   await write(join(weekRoot, "modules", "market-analysis.md"), vaultDocument("Market analysis"))
   await write(join(weekRoot, "modules", "competitor-data.md"), vaultDocument("Competitor data"))
   await write(join(weekRoot, "prep", "week.md"), vaultDocument("## Agenda\n\nMarket analysis"))
@@ -108,7 +116,7 @@ async function fixtureVault(withFeedback: boolean): Promise<string> {
     join(weekRoot, "report.json"),
     `${JSON.stringify(
       {
-        runId: "strat-101-2025-01-01",
+        runId,
         unknownVisibility: 0,
         leakageCount: 0,
         weeks: [
@@ -135,13 +143,13 @@ describe("simulation ground-truth comparison", () => {
       // When: the comparator reads the local simulation and pilot vault without network access.
       const result = await compareSimulation({
         config: config(root),
-        runId: "strat-101-2025-01-01",
+        runId: simulationRunId(),
       })
 
       // Then: coverage—not similarity to the final submission—is reported for every criterion.
       const comparison = await readFile(result.comparisonPath, "utf8")
       const scorecard = await readFile(result.scorecardPath, "utf8")
-      expect(comparison).toMatch(/\| market analysis \| hit \|/)
+      expect(comparison).toMatch(/\| modules\/market-analysis\.md \| hit \|/)
       expect(comparison).toMatch(/\| evidence \| missed-but-flagged \|/)
       expect(comparison).toContain("competitor-data.md")
       expect(comparison).toContain("not similarity-to-final")
@@ -161,11 +169,38 @@ describe("simulation ground-truth comparison", () => {
       // When: the local comparison is generated.
       const result = await compareSimulation({
         config: config(root),
-        runId: "strat-101-2025-01-01",
+        runId: simulationRunId(),
       })
 
       // Then: the artifact remains scorecard-ready and explicitly has no ground truth.
       expect(await readFile(result.comparisonPath, "utf8")).toContain("no ground truth")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("keeps reading legacy flat feedback on case-sensitive filesystems", async () => {
+    const root = await fixtureVault(false)
+    const paths = coursePaths(root, course.code, course.canvasId)
+    try {
+      await write(
+        join(paths.root, vaultLayout.assignments, `pricing-memo${vaultLayout.feedback}`),
+        vaultDocument(
+          [
+            "Rubric assessment:",
+            "",
+            "```json",
+            JSON.stringify({ evidence: { points: 0 } }),
+            "```",
+          ].join("\n"),
+          "assignment-1-feedback",
+          "feedback",
+        ),
+      )
+      const result = await compareSimulation({ config: config(root), runId: simulationRunId() })
+      expect(await readFile(result.comparisonPath, "utf8")).toMatch(
+        /\| evidence \| missed-but-flagged \|/,
+      )
     } finally {
       await rm(root, { recursive: true, force: true })
     }

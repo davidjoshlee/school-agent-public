@@ -1,4 +1,4 @@
-import { slugify } from "../store/paths.js"
+import { slugify, vaultLayout } from "../store/paths.js"
 import { buildModuleMembership } from "./retrieve-module-index.js"
 import { type CourseModule, loadCourseModules } from "./retrieve-modules.js"
 
@@ -40,7 +40,8 @@ export async function selectModulesForAssignment(
     module.items.some(
       (item) =>
         item.type === "Assignment" &&
-        (item.canvasId === assignment.canvasId || item.resolvedPath === `assignments/${slug}.md`),
+        (item.canvasId === assignment.canvasId ||
+          (item.resolvedPath !== undefined && assignmentPathMatches(item.resolvedPath, slug))),
     ),
   )
   if (matched.length === 0) return { mode: "keyword-fallback" }
@@ -143,4 +144,19 @@ function dedupedPaths(
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function assignmentPathMatches(path: string, titleSlug: string): boolean {
+  if (path === `assignments/${titleSlug}.md`) return true
+  const parts = path.split("/")
+  const index = parts.findIndex(
+    (part) => part === vaultLayout.assignmentsDirectory || part === vaultLayout.assignments,
+  )
+  const directory = index < 0 ? undefined : parts[index + 1]
+  if (directory === undefined) return false
+  const title = directory
+    .replace(/^\d{4}-\d{2}-\d{2}\s+-\s+/, "")
+    .replace(/^Undated\s+-\s+/i, "")
+    .replace(/^Assignment\s+-\s+/i, "")
+  return slugify(title, "") === titleSlug
 }

@@ -69,3 +69,5 @@ npm test
 ```
 
 Contributions are welcome—please read [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). The code is under the [MIT License](LICENSE); it does not grant rights to course materials or other user content.
+
+Coding agents can use the optional [School Agent plugin](docs/PLUGIN.md) for product-specific guidance. It does not connect to Canvas or expose a user's vault.

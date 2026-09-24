@@ -1,0 +1,27 @@
+{
+  "name": "school-agent",
+  "version": "0.3.0",
+  "description": "Use and develop the local-first School Agent safely",
+  "author": {
+    "name": "School Agent contributors",
+    "url": "https://github.com/davidjoshlee/school-agent-public"
+  },
+  "homepage": "https://github.com/davidjoshlee/school-agent-public",
+  "repository": "https://github.com/davidjoshlee/school-agent-public",
+  "license": "MIT",
+  "keywords": ["school-agent", "canvas", "coursework", "local-first"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "School Agent",
+    "shortDescription": "Local course prep and development guidance",
+    "longDescription": "Guidance for operating and contributing to School Agent, a local-first, read-only Canvas companion. Includes safe onboarding, prep verification, codebase architecture, and privacy boundaries. It does not connect to Canvas or grant access to any student's data.",
+    "developerName": "School Agent contributors",
+    "category": "Education",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Help me set up School Agent for my Canvas courses",
+      "Prepare a course week and verify the brief",
+      "Help me implement a School Agent feature"
+    ]
+  }
+}

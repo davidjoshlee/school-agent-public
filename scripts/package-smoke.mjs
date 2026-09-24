@@ -1,15 +1,5 @@
 import { spawnSync } from "node:child_process"
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -33,27 +23,20 @@ function run(command, arguments_, options = {}) {
 }
 
 function installTarball(tarball) {
-  const install = spawnSync("npm", ["install", "--offline", "--no-audit", "--no-fund", tarball], {
+  // CI must verify a real clean install. Set this only when explicitly testing
+  // whether the npm cache alone is sufficient for the smoke test.
+  const offline = process.env.SCHOOL_AGENT_PACKAGE_SMOKE_OFFLINE === "true"
+  const arguments_ = ["install", "--no-audit", "--no-fund"]
+  if (offline) arguments_.push("--offline")
+  arguments_.push(tarball)
+  const install = spawnSync("npm", arguments_, {
     cwd: temporaryDirectory,
     encoding: "utf8",
     env: process.env,
   })
   if (install.status === 0) return
-  if (process.env.CI === "true") {
-    throw new Error(`offline tarball install failed:\n${install.stdout}\n${install.stderr}`)
-  }
-
-  // Some developer machines have node_modules but not npm's complete tarball
-  // cache. Exercise the packed files without fetching by linking existing deps.
-  run("tar", ["-xzf", tarball])
-  const modules = join(temporaryDirectory, "node_modules")
-  mkdirSync(modules)
-  renameSync(join(temporaryDirectory, "package"), join(modules, "school-agent"))
-  symlinkSync(resolve(root, "node_modules"), join(modules, "school-agent", "node_modules"), "dir")
-  chmodSync(join(modules, "school-agent", "bin", "school.js"), 0o755)
-  mkdirSync(join(modules, ".bin"))
-  symlinkSync("../school-agent/bin/school.js", join(modules, ".bin", "school"))
-  symlinkSync("../school-agent/bin/school.js", join(modules, ".bin", "school-agent"))
+  const mode = offline ? "offline" : "online"
+  throw new Error(`${mode} tarball install failed:\n${install.stdout}\n${install.stderr}`)
 }
 
 try {

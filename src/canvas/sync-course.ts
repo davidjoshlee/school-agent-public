@@ -20,6 +20,15 @@ import {
 import type { FileAuditGap } from "./files.js"
 import { permissionDeniedStatus } from "./http.js"
 import {
+  buildNavigationModel,
+  classifyNavigationItem,
+  type NavigationDocument,
+  type NavigationPeriod,
+  navigationArtifacts,
+  navigationDate,
+  navigationPeriodForDate,
+} from "./sync-navigation.js"
+import {
   courseUrl,
   moduleDates,
   renderAnnouncement,
@@ -30,6 +39,7 @@ import {
   resolveCourseYear,
 } from "./sync-render.js"
 import {
+  type SyncNavigationCollector,
   type SyncResourceInput,
   syncAssignmentFiles,
   syncFeedback,
@@ -115,6 +125,77 @@ export async function syncCourse(input: CourseSyncInput): Promise<SyncCourseRepo
   const quizzes = await permissionAware("quizzes", permissionGaps, courseId, course.canvasUrl, () =>
     listQuizzes(input.options.client, input.course.id),
   )
+  const courseYear = resolveCourseYear(
+    input.course,
+    (assignments ?? []).map((assignment) => assignment.due_at),
+  )
+  const navigation = createNavigationCollector(input.options, course)
+  const skipFileIds = new Set<string>()
+  const planningDocuments: NavigationDocument[] = []
+  for (const module of modules ?? []) {
+    const dates = moduleDates(module, courseYear)
+    planningDocuments.push({
+      title: module.name ?? `Module ${module.id}`,
+      path: `planning/${module.id}.md`,
+      type: vaultDocumentKinds.module,
+      canvasId: module.id,
+      ...(dates === undefined ? {} : { dates }),
+    })
+  }
+  for (const file of files ?? []) {
+    if (file.size === undefined || file.updated_at === undefined) continue
+    planningDocuments.push({
+      title: file.display_name ?? `File ${file.id}`,
+      path: `planning/file-${file.id}.md`,
+      type: vaultDocumentKinds.file,
+      canvasId: file.id,
+      dates: {
+        created_at: file.created_at ?? file.updated_at ?? null,
+        updated_at: file.updated_at ?? null,
+      },
+    })
+  }
+  for (const announcement of announcements ?? []) {
+    planningDocuments.push({
+      title: announcement.title ?? `Announcement ${announcement.id}`,
+      path: `planning/announcement-${announcement.id}.md`,
+      type: "announcements",
+      canvasId: announcement.id,
+      dates: { posted_at: announcement.posted_at ?? null },
+    })
+  }
+  const navigationPlan = buildNavigationModel({
+    course: { name: input.course.name ?? null, code: courseCode },
+    documents: planningDocuments,
+    assignments: (assignments ?? []).map((assignment) => ({
+      title: assignment.name ?? `Assignment ${assignment.id}`,
+      path: `planning/assignment-${assignment.id}.md`,
+      canvasId: assignment.id,
+      dueAt: assignment.due_at ?? null,
+    })),
+    now: input.now(),
+  })
+  const modulePeriods = new Map<string, NavigationPeriod>()
+  for (const module of modules ?? []) {
+    const dates = moduleDates(module, courseYear)
+    const date = navigationDate(
+      dates?.["session_at"] ?? dates?.["unlock_at"] ?? dates?.["created_at"],
+    )
+    const period = navigationPeriodForDate(navigationPlan, date)
+    if (period !== null) modulePeriods.set(String(module.id), period)
+  }
+  const assignmentModuleIds = assignmentModuleMap(modules ?? [])
+  const resourceInput: SyncResourceInput = {
+    options: input.options,
+    writer: input.writer,
+    now: input.now,
+    canvasCourse: input.course,
+    course,
+    navigation,
+    modulePeriods,
+    skipFileIds,
+    ...(courseYear === undefined ? {} : { courseYear }),
+  }
   if (syllabus !== null) {
     await writeArtifact({
       writer: input.writer,
@@ -124,20 +205,8 @@ export async function syncCourse(input: CourseSyncInput): Promise<SyncCourseRepo
       canvasId: input.course.id,
       canvasUrl: course.canvasUrl,
       content: renderSyllabus(syllabus),
+      navigation,
     })
-  }
-  const courseYear = resolveCourseYear(
-    input.course,
-    (assignments ?? []).map((assignment) => assignment.due_at),
-  )
-  const assignmentModuleIds = assignmentModuleMap(modules ?? [])
-  const resourceInput: SyncResourceInput = {
-    options: input.options,
-    writer: input.writer,
-    now: input.now,
-    canvasCourse: input.course,
-    course,
-    ...(courseYear === undefined ? {} : { courseYear }),
   }
   await syncSyllabusFiles({
     ...resourceInput,
@@ -147,7 +216,7 @@ export async function syncCourse(input: CourseSyncInput): Promise<SyncCourseRepo
   })
   const pages: { readonly page: CanvasPage; readonly module: Module }[] = []
   if (modules !== null)
-    await syncModules({ resourceInput, modules, changes, permissionGaps, pages })
+    await syncModules({ resourceInput, modules, changes, permissionGaps, pages, modulePeriods })
   await syncModuleFiles({ ...resourceInput, modules: modules ?? [], gaps, permissionGaps })
   await syncPageFiles({ ...resourceInput, pages, gaps, permissionGaps })
   if (assignments !== null) {
@@ -177,6 +246,18 @@ export async function syncCourse(input: CourseSyncInput): Promise<SyncCourseRepo
     discussions: discussions ?? [],
     quizzes: quizzes ?? [],
   })
+  const navigationModel = buildNavigationModel({
+    course: { name: input.course.name ?? null, code: courseCode },
+    documents: navigation.documents,
+    now: input.now(),
+  })
+  for (const artifact of navigationArtifacts(navigationModel)) {
+    await input.writer.writeNavigation({
+      course,
+      path: artifact.path,
+      content: artifact.content,
+    })
+  }
   const tombstones =
     assignments === null
       ? 0
@@ -237,9 +318,11 @@ async function syncModules(input: {
   readonly changes: SyncChange[]
   readonly permissionGaps: SyncPermissionGap[]
   readonly pages: { readonly page: CanvasPage; readonly module: Module }[]
+  readonly modulePeriods: ReadonlyMap<string, NavigationPeriod>
 }): Promise<void> {
   for (const module of input.modules) {
     const dates = moduleDates(module, input.resourceInput.courseYear)
+    const period = input.modulePeriods.get(String(module.id))
     const result = await writeArtifact({
       writer: input.resourceInput.writer,
       course: input.resourceInput.course,
@@ -252,10 +335,24 @@ async function syncModules(input: {
       content: renderModule(module),
       ...(dates === undefined ? {} : { dates }),
       module: {
-        number: module.position ?? 0,
+        number: period?.number ?? module.position ?? 0,
         title: module.name ?? `Module ${module.id}`,
-        canvasId: module.id,
       },
+      ...(period === undefined
+        ? {}
+        : {
+            period: {
+              kind: period.kind,
+              number: period.number,
+              date: period.startDate,
+              title: period.title,
+            },
+          }),
+      moduleCanvasId: module.id,
+      bucket: "other",
+      ...(input.resourceInput.navigation === undefined
+        ? {}
+        : { navigation: input.resourceInput.navigation }),
     })
     input.resourceInput.options.index.upsertModule({
       canvasId: module.id,
@@ -302,6 +399,7 @@ async function syncModulePages(
     if (page === null) continue
     const canvasUrl = `${courseHome}/pages/${encodeURIComponent(page.url)}`
     const dates = moduleDates(module, input.courseYear)
+    const period = input.modulePeriods?.get(String(module.id))
     await writeArtifact({
       writer: input.writer,
       course: input.course,
@@ -312,11 +410,27 @@ async function syncModulePages(
       content: renderPage(page),
       ...(dates === undefined ? {} : { dates }),
       module: {
-        number: module.position ?? 0,
+        number: period?.number ?? module.position ?? 0,
         title: module.name ?? `Module ${module.id}`,
         canvasId: module.id,
       },
       moduleCanvasId: module.id,
+      ...(period === undefined
+        ? {}
+        : {
+            period: {
+              kind: period.kind,
+              number: period.number,
+              date: period.startDate,
+              title: period.title,
+            },
+          }),
+      bucket: classifyNavigationBucket(
+        page.title ?? item.title ?? page.url,
+        renderPage(page),
+        "page",
+      ),
+      ...(input.navigation === undefined ? {} : { navigation: input.navigation }),
     })
     pages.push({ page, module })
   }
@@ -347,6 +461,13 @@ async function syncAssignments(input: {
         unlock_at: assignment.unlock_at ?? null,
       },
       ...(moduleCanvasId === undefined ? {} : { moduleCanvasId }),
+      assignment: {
+        title: assignment.name ?? `Assignment ${assignment.id}`,
+        dueAt: assignment.due_at ?? null,
+      },
+      ...(input.resourceInput.navigation === undefined
+        ? {}
+        : { navigation: input.resourceInput.navigation }),
     })
     input.resourceInput.options.index.upsertAssignment({
       canvasId: assignment.id,
@@ -388,6 +509,9 @@ async function syncAnnouncements(input: {
         courseUrl(input.resourceInput.options.canvasBaseUrl, input.resourceInput.canvasCourse.id),
       content: renderAnnouncement(announcement),
       dates: { posted_at: announcement.posted_at ?? null },
+      ...(input.resourceInput.navigation === undefined
+        ? {}
+        : { navigation: input.resourceInput.navigation }),
     })
     input.resourceInput.options.index.upsertAnnouncement({
       canvasId: announcement.id,
@@ -425,4 +549,22 @@ function vaultCourse(options: CanvasSyncInput, course: Course, courseCode: strin
     canvasUrl: courseUrl(options.canvasBaseUrl, course.id),
     aiPolicy: options.courseAiPolicies?.[String(course.id)] ?? "allowed",
   }
+}
+
+function createNavigationCollector(
+  options: CanvasSyncInput,
+  course: VaultCourse,
+): SyncNavigationCollector {
+  return {
+    courseRoot: coursePaths(options.vaultPath, course.code, course.canvasId).root,
+    documents: [],
+  }
+}
+
+function classifyNavigationBucket(
+  title: string,
+  content: string,
+  type: string,
+): "prep" | "materials" | "other" {
+  return classifyNavigationItem({ title, path: "", type, content })
 }

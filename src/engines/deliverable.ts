@@ -83,6 +83,12 @@ export const DELIVERABLE_CUES: readonly CueDef[] = [
     strength: 2,
   },
   {
+    label: "Preparation Questions",
+    pattern: /\bpreparation questions\b/i,
+    kind: "questions",
+    strength: 2,
+  },
+  {
     label: "Discussion questions",
     pattern: /\bdiscussion questions\b/i,
     kind: "questions",
@@ -211,8 +217,29 @@ function repairDroppedCaps(text: string): string {
   return result
 }
 
+// Canvas rich-text pages often express preparation questions as an HTML
+// ordered list. Preserve their ordinal identity before whitespace
+// normalization; otherwise `<li>` boundaries disappear and the enumerator
+// parser sees one undifferentiated prose block after the cue.
+function normalizeOrderedHtmlLists(text: string): string {
+  return text.replace(/<ol\b[^>]*>([\s\S]*?)<\/ol>/gi, (_list, body: string) => {
+    const items = [...body.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
+    if (items.length === 0) return body
+    return items
+      .map((item, index) => {
+        const content = (item[1] ?? "").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/gi, " ")
+        return `${index + 1}. ${content}`
+      })
+      .join(" ")
+  })
+}
+
 function normalize(text: string): string {
-  return repairDroppedCaps(text).replace(/\s+/g, " ").trim()
+  const plain = normalizeOrderedHtmlLists(text)
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+  return repairDroppedCaps(plain).replace(/\s+/g, " ").trim()
 }
 
 // A part span sometimes starts with its own "(due ...)" or "(due ...):"
