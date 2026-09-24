@@ -1,10 +1,10 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
-import { basename, join, relative } from "node:path"
+import { join, relative } from "node:path"
 
 import type { AgentRunner } from "../agents/runner.js"
 import type { SchoolConfig } from "../config/index.js"
 import { createSchoolIndex } from "../store/db.js"
-import { coursePaths } from "../store/paths.js"
+import { coursePaths, slugify } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault.js"
 import {
   draftAssignment,
@@ -45,7 +45,7 @@ type WeekResult =
     }
 
 export type SimulationResult = {
-  /** One self-contained course-week directory name per completed week (e.g. "strat-101-2025-01-01"). */
+  /** One self-contained course-week path relative to `_simulations` per completed week. */
   readonly runDirs: readonly string[]
   readonly unknownVisibility: number
   readonly leakageCount: number
@@ -75,19 +75,21 @@ export async function runSimulation(input: SimulationInput): Promise<SimulationR
       continue
     }
     const weekCourse = { ...snapshot.course, code: `${snapshot.course.code}-${asOf}` }
-    const courseWeekRoot = coursePaths(simsRoot, weekCourse.code, weekCourse.canvasId).root
-    await rm(courseWeekRoot, { recursive: true, force: true })
-    await mkdir(courseWeekRoot, { recursive: true })
-    await stageSnapshot({ ...snapshot, course: weekCourse }, documents, simsRoot)
+    const weekKey = `${slugify(snapshot.course.code, `course-${snapshot.course.canvasId}`)}-${slugify(snapshot.course.canvasId, "unknown")}-${asOf}`
+    const weekVaultRoot = join(simsRoot, weekKey)
+    const courseWeekRoot = coursePaths(weekVaultRoot, weekCourse.code, weekCourse.canvasId).root
+    await rm(weekVaultRoot, { recursive: true, force: true })
+    await mkdir(weekVaultRoot, { recursive: true })
+    await stageSnapshot({ ...snapshot, course: weekCourse }, documents, weekVaultRoot)
     const index = createSchoolIndex({ path: ":memory:" })
     try {
       const configuration: SchoolConfig = {
         ...input.config,
-        vault: { path: simsRoot, gitInit: false },
+        vault: { path: weekVaultRoot, gitInit: false },
         index: { path: ":memory:" },
       }
       const brief = await generatePrepBrief({
-        vaultRoot: simsRoot,
+        vaultRoot: weekVaultRoot,
         config: configuration,
         course: weekCourse,
         period: { kind: "week", value: asOf },
@@ -105,7 +107,7 @@ export async function runSimulation(input: SimulationInput): Promise<SimulationR
         draftDocuments.map(async (document) => {
           const parsed = parseVaultDocument(document.raw, document.path)
           const draft = await draftAssignment({
-            vaultRoot: simsRoot,
+            vaultRoot: weekVaultRoot,
             config: configuration,
             course: weekCourse,
             assignment: {
@@ -130,8 +132,9 @@ export async function runSimulation(input: SimulationInput): Promise<SimulationR
         brief: { path: relative(courseWeekRoot, brief.path), sources: briefSources },
         drafts,
       }
+      const runDir = relative(simsRoot, courseWeekRoot)
       const report = {
-        runId: basename(courseWeekRoot),
+        runId: runDir,
         unknownVisibility,
         leakageCount: weekLeakage,
         weeks: [week],
@@ -143,7 +146,7 @@ export async function runSimulation(input: SimulationInput): Promise<SimulationR
         "utf8",
       )
       weeks.push(week)
-      runDirs.push(basename(courseWeekRoot))
+      runDirs.push(runDir)
       leakageCount += weekLeakage
     } finally {
       index.close()
@@ -208,5 +211,11 @@ function countLeakage(
 }
 
 function titleFor(path: string): string {
-  return path.split("/").at(-1)?.replace(/\.md$/, "") ?? "assignment"
+  const parts = path.split("/")
+  const assignments = parts.findIndex((part) => part === "Assignments" || part === "assignments")
+  const directory = assignments < 0 ? undefined : parts[assignments + 1]
+  if (directory !== undefined && !directory.endsWith(".md")) {
+    return directory.replace(/^\d{4}-\d{2}-\d{2}\s+-\s+/, "").replace(/^Undated\s+-\s+/i, "")
+  }
+  return parts.at(-1)?.replace(/\.md$/, "") ?? "assignment"
 }

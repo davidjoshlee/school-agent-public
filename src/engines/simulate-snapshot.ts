@@ -1,8 +1,14 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 
 import type { SchoolConfig } from "../config/index.js"
-import { coursePaths, slugify, vaultDocumentKinds, vaultLayout } from "../store/paths.js"
+import {
+  coursePaths,
+  periodPaths,
+  slugify,
+  vaultDocumentKinds,
+  vaultLayout,
+} from "../store/paths.js"
 import { parseVaultDocument, renderVaultDocument } from "../store/vault.js"
 import type { PrepCourse } from "./prep.js"
 import { SimulationError } from "./simulate.js"
@@ -94,10 +100,17 @@ export async function stageSnapshot(
   // them unconditionally so the replay's guidance-driven structure/instructions
   // stay available; guidance has no future date, so this never leaks.
   const staged = new Map<string, SnapshotDocument>()
-  for (const document of documents) staged.set(document.relativePath, document)
+  for (const document of documents) {
+    const path = stagedRelativePath(paths, document)
+    staged.set(path, stagedDocument(path, document))
+    // Keep the original path too: module item membership and existing prep
+    // citations may still refer to legacy `modules/...` paths.
+    if (path !== document.relativePath) staged.set(document.relativePath, document)
+  }
   for (const document of snapshot.documents) {
     if (isGuidanceDocument(document)) {
-      staged.set(document.relativePath, document)
+      const path = stagedRelativePath(paths, document)
+      staged.set(path, stagedDocument(path, document))
     }
   }
   const allowed = new Set(staged.keys())
@@ -114,6 +127,49 @@ export async function stageSnapshot(
       await writeFile(path, document.raw, "utf8")
     }),
   )
+}
+
+function stagedDocument(relativePath: string, document: SnapshotDocument): SnapshotDocument {
+  if (relativePath === document.relativePath) return document
+  const parsed = parseVaultDocument(document.raw, document.path)
+  const dates = { ...parsed.frontmatter.dates }
+  if (dates["session_at"] === undefined || dates["session_at"] === null) {
+    const releaseDate = dates["unlock_at"] ?? dates["posted_at"] ?? dates["created_at"]
+    if (releaseDate !== undefined && releaseDate !== null) dates["session_at"] = releaseDate
+  }
+  const raw = renderVaultDocument(
+    { ...parsed.frontmatter, dates, type: vaultDocumentKinds.module },
+    parsed.content,
+  )
+  return { ...document, relativePath, raw }
+}
+
+/**
+ * Legacy module documents lived in `modules/`, which is outside the v2
+ * period folders prep deliberately requires. During an isolated simulation,
+ * place dated legacy modules into a Week/Milestone container so the unchanged
+ * fail-closed period selector can resolve them.
+ */
+function stagedRelativePath(
+  course: ReturnType<typeof coursePaths>,
+  document: SnapshotDocumentLike,
+): string {
+  if (!document.relativePath.startsWith(`${vaultLayout.modules}/`) || !isModuleDocument(document)) {
+    return document.relativePath
+  }
+  const parsed = parseVaultDocument(document.raw, document.path)
+  const date = Object.values(parsed.frontmatter.dates).find(
+    (value): value is string => value !== null && /^\d{4}-\d{2}-\d{2}/.test(value),
+  )
+  if (date === undefined) return document.relativePath
+  const title = basename(document.relativePath).replace(/\.md$/i, "")
+  const isMilestone = /milestone/i.test(title)
+  const period = periodPaths(course, {
+    kind: isMilestone ? "milestone" : "week",
+    number: 1,
+    ...(isMilestone ? { title } : { date }),
+  })
+  return join(period.other.replace(`${course.root}/`, ""), basename(document.relativePath))
 }
 
 export function assignmentDocuments(

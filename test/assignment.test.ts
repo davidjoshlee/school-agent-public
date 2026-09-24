@@ -89,7 +89,7 @@ async function fixtureVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-assignment-")
   const paths = coursePaths(root, course.code, course.canvasId)
   await put(paths.syllabus, "Week 1 pricing under uncertainty.")
-  await put(join(paths.modules, "01-pricing", "case.md"), "Contribution margin case.")
+  await put(join(paths.root, "Week 01 - Sep 01", "case.md"), "Contribution margin case.")
   await put(join(paths.assignments, "pricing-memo.md"), "Write a pricing recommendation.")
   await put(
     paths.index,
@@ -97,7 +97,7 @@ async function fixtureVault(): Promise<string> {
       "| title | type | dates | path | token estimate |",
       "| --- | --- | --- | --- | --- |",
       "| Pricing Memo | assignment | 2026-09-08 | assignments/pricing-memo.md | 30 |",
-      "| Pricing Case | module | 2026-09-01 | modules/01-pricing/case.md | 30 |",
+      "| Pricing Case | module | 2026-09-01 | Week 01 - Sep 01/case.md | 30 |",
     ].join("\n"),
   )
   return root
@@ -620,7 +620,7 @@ describe("assignment engine", () => {
       "For this assignment you need to prepare PART I.",
     )
     await put(
-      join(paths.modules, "01-pricing", "case.md"),
+      join(paths.root, "Week 01 - Sep 01", "case.md"),
       "Required: PART I: Compute the payback period for the proposed plant expansion. " +
         "PART II: (a) Compute the discounted payback period. (b) Recommend whether to proceed.",
     )

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 
 import { syncCanvas } from "../src/canvas/sync.js"
 import { createSchoolIndex } from "../src/store/db.js"
+import { coursePaths } from "../src/store/paths.js"
 import { installCourseHandlers, server } from "./helpers/canvasMock.js"
 import { client } from "./helpers/schoolConfig.js"
 import { temporaryDirectory } from "./helpers/tempDir.js"
@@ -77,7 +78,7 @@ describe("v2 Canvas navigation integration", () => {
       now: () => new Date("2026-09-01T12:00:00Z"),
     })
 
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = coursePaths(vaultPath, "FIN-101", "1").root
     const topLevel = await readdir(courseRoot, { withFileTypes: true })
     expect(
       topLevel
@@ -115,7 +116,7 @@ describe("v2 Canvas navigation integration", () => {
       now: () => new Date("2026-09-23T12:00:00Z"),
     })
 
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = coursePaths(vaultPath, "FIN-101", "1").root
     const topLevel = await readdir(courseRoot, { withFileTypes: true })
     expect(
       topLevel.filter((entry) => entry.isDirectory() && entry.name.startsWith("Week ")),
@@ -146,7 +147,7 @@ describe("v2 Canvas navigation integration", () => {
       now: () => new Date("2026-09-23T12:00:00Z"),
     })
 
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = coursePaths(vaultPath, "FIN-101", "1").root
     const weekRoot = join(courseRoot, "Week 01 - Sep 21")
     await expect(stat(join(courseRoot, "00 Home.md"))).resolves.toBeDefined()
     await expect(stat(join(weekRoot, "00 Overview.md"))).resolves.toBeDefined()

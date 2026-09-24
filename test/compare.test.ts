@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest"
 import type { SchoolConfig } from "../src/config/index.js"
 import { renderAssignmentProvenance } from "../src/engines/assignment-provenance.js"
 import { compareSimulation } from "../src/engines/compare.js"
-import { coursePaths } from "../src/store/paths.js"
+import { coursePaths, slugify } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { schoolConfig } from "./helpers/schoolConfig.js"
@@ -24,6 +24,11 @@ function config(root: string): SchoolConfig {
     canvas: { baseUrl: "https://canvas.example.invalid" },
     courses: { pilotCourseId: course.canvasId },
   })
+}
+
+function simulationRunId(asOf = "2025-01-01"): string {
+  const weekKey = `${slugify(course.code, `course-${course.canvasId}`)}-${slugify(course.canvasId, "unknown")}-${asOf}`
+  return join(weekKey, coursePaths("", course.code, course.canvasId).root)
 }
 
 function vaultDocument(content: string): string {
@@ -80,7 +85,8 @@ async function fixtureVault(withFeedback: boolean): Promise<string> {
       ),
     )
   }
-  const weekRoot = join(root, "_simulations", "strat-101-2025-01-01")
+  const runId = simulationRunId()
+  const weekRoot = join(root, "_simulations", runId)
   await write(join(weekRoot, "modules", "market-analysis.md"), vaultDocument("Market analysis"))
   await write(join(weekRoot, "modules", "competitor-data.md"), vaultDocument("Competitor data"))
   await write(join(weekRoot, "prep", "week.md"), vaultDocument("## Agenda\n\nMarket analysis"))
@@ -108,7 +114,7 @@ async function fixtureVault(withFeedback: boolean): Promise<string> {
     join(weekRoot, "report.json"),
     `${JSON.stringify(
       {
-        runId: "strat-101-2025-01-01",
+        runId,
         unknownVisibility: 0,
         leakageCount: 0,
         weeks: [
@@ -135,7 +141,7 @@ describe("simulation ground-truth comparison", () => {
       // When: the comparator reads the local simulation and pilot vault without network access.
       const result = await compareSimulation({
         config: config(root),
-        runId: "strat-101-2025-01-01",
+        runId: simulationRunId(),
       })
 
       // Then: coverage—not similarity to the final submission—is reported for every criterion.
@@ -161,7 +167,7 @@ describe("simulation ground-truth comparison", () => {
       // When: the local comparison is generated.
       const result = await compareSimulation({
         config: config(root),
-        runId: "strat-101-2025-01-01",
+        runId: simulationRunId(),
       })
 
       // Then: the artifact remains scorecard-ready and explicitly has no ground truth.

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -45,9 +45,11 @@ function document(
 
 async function writeLegacyFixture(root: string): Promise<{
   readonly courseRoot: string
+  readonly destinationRoot: string
   readonly files: Readonly<Record<string, string>>
 }> {
   const courseRoot = join(root, course)
+  const destinationRoot = join(root, "course-101")
   const files = {
     home: join(courseRoot, "_index.md"),
     syllabus: join(courseRoot, "00-syllabus.md"),
@@ -100,7 +102,7 @@ async function writeLegacyFixture(root: string): Promise<{
   )
   await mkdir(join(root, "_meta"), { recursive: true })
   await writeFile(join(root, "_meta", "layout.json"), '{"layout_version":1}\n')
-  return { courseRoot, files }
+  return { courseRoot, destinationRoot, files }
 }
 
 describe("vault v1 -> v2 migration", () => {
@@ -117,7 +119,7 @@ describe("vault v1 -> v2 migration", () => {
     const plan = await planVaultMigration({ root })
 
     expect(plan.moves.map((action) => action.destinationRelative)).toContain(
-      "Milestone 01 - Sep 21/00 Overview.md",
+      "course-101/Milestone 01 - Sep 21/00 Overview.md",
     )
   })
 
@@ -133,13 +135,14 @@ describe("vault v1 -> v2 migration", () => {
     expect(plan.ready).toBe(true)
     expect(plan.moves.map((action) => action.destinationRelative).sort()).toEqual(
       [
-        "Assignments/2026-10-02 - Synthetic Case Analysis/00 Prompt.md",
-        "Assignments/2026-10-02 - Synthetic Case Analysis/Drafts/response.md",
-        "Resources/Syllabus.md",
-        "Week 01 - Sep 21/Materials/case-notes.md",
-        "Week 01 - Sep 21/Materials/reading.md",
-        "Week 01 - Sep 21/00 Overview.md",
-        "Week 01 - Sep 21/Prep/week-2026-09-21.md",
+        "course-101/_index.md",
+        "course-101/Assignments/2026-10-02 - Synthetic Case Analysis/00 Prompt.md",
+        "course-101/Assignments/2026-10-02 - Synthetic Case Analysis/Drafts/response.md",
+        "course-101/Resources/Syllabus.md",
+        "course-101/Week 01 - Sep 21/Materials/case-notes.md",
+        "course-101/Week 01 - Sep 21/Materials/reading.md",
+        "course-101/Week 01 - Sep 21/00 Overview.md",
+        "course-101/Week 01 - Sep 21/Prep/week-2026-09-21.md",
       ].sort(),
     )
     expect(await readFile(fixture.files.assignment)).toEqual(before)
@@ -160,10 +163,10 @@ describe("vault v1 -> v2 migration", () => {
     })
 
     expect(result.applied).toBe(true)
-    expect(result.moved).toHaveLength(7)
+    expect(result.moved).toHaveLength(8)
     const assignment = await readFile(
       join(
-        fixture.courseRoot,
+        fixture.destinationRoot,
         "Assignments",
         "2026-10-02 - Synthetic Case Analysis",
         "00 Prompt.md",
@@ -171,6 +174,18 @@ describe("vault v1 -> v2 migration", () => {
       "utf8",
     )
     expect(assignment).toBe(original)
+    expect(await readFile(join(fixture.destinationRoot, "_index.md"), "utf8")).toContain(
+      "canvas_id: index",
+    )
+    // Migration moves every file but intentionally leaves empty legacy
+    // directories in place; pruning them is not part of the migration plan.
+    expect((await readdir(fixture.courseRoot)).sort()).toEqual([
+      "assignments",
+      "drafts",
+      "files",
+      "modules",
+      "prep",
+    ])
     expect(await readFile(join(root, "_meta", "layout.json"), "utf8")).toContain(
       '"layout_version": 2',
     )
@@ -186,7 +201,7 @@ describe("vault v1 -> v2 migration", () => {
   it("does not overwrite a protected destination or advance layout metadata", async () => {
     const root = await temporaryDirectory("school-agent-vault-migration-conflict-")
     const fixture = await writeLegacyFixture(root)
-    const destination = join(fixture.courseRoot, "Resources", "Syllabus.md")
+    const destination = join(fixture.destinationRoot, "Resources", "Syllabus.md")
     const protectedBytes = document(
       "user-syllabus",
       "00-syllabus.md",
@@ -194,13 +209,16 @@ describe("vault v1 -> v2 migration", () => {
       {},
       { source: "user", status: "approved" },
     )
-    await mkdir(join(fixture.courseRoot, "Resources"), { recursive: true })
+    await mkdir(join(fixture.destinationRoot, "Resources"), { recursive: true })
+    await writeFile(join(fixture.destinationRoot, "_index.md"), await readFile(fixture.files.home))
     await writeFile(destination, protectedBytes)
 
     const plan = await planVaultMigration({ root })
     expect(plan.ready).toBe(false)
     expect(
-      plan.conflicts.some((action) => action.destinationRelative === "Resources/Syllabus.md"),
+      plan.conflicts.some(
+        (action) => action.destinationRelative === "course-101/Resources/Syllabus.md",
+      ),
     ).toBe(true)
     await expect(executeVaultMigration(plan)).rejects.toThrow("destination conflict")
     expect(await readFile(destination)).toEqual(Buffer.from(protectedBytes))
@@ -223,10 +241,110 @@ describe("vault v1 -> v2 migration", () => {
     const plan = await planVaultMigration({ root })
     const destinations = plan.moves
       .map((action) => action.destinationRelative)
-      .filter((path) => path.startsWith("Other/note"))
+      .filter((path) => path.startsWith("course-101/Other/note"))
       .sort()
 
-    expect(destinations).toEqual(["Other/note (2).md", "Other/note.md"])
+    expect(destinations).toEqual(["course-101/Other/note (2).md", "course-101/Other/note.md"])
     expect(destinations.join("\n")).not.toContain("canvas-secret")
+  })
+
+  it("blocks migration when the course ID cannot be confirmed from its index URL", async () => {
+    const root = await temporaryDirectory("school-agent-vault-migration-ambiguous-id-")
+    const fixture = await writeLegacyFixture(root)
+    await writeFile(
+      fixture.files.home,
+      document("index", "_index.md", "# Course home\n").replace(
+        "https://canvas.example.invalid/courses/101",
+        "https://canvas.example.invalid/",
+      ),
+    )
+
+    const plan = await planVaultMigration({ root })
+
+    expect(plan.ready).toBe(false)
+    expect(plan.conflicts[0]?.reason).toContain("canvas_url has no course ID")
+    expect(await readFile(fixture.files.assignment, "utf8")).toContain("Synthetic Case")
+    await expect(readFile(fixture.destinationRoot, "utf8")).rejects.toThrow()
+  })
+
+  it("blocks a destination directory whose index identifies a different course", async () => {
+    const root = await temporaryDirectory("school-agent-vault-migration-root-conflict-")
+    const fixture = await writeLegacyFixture(root)
+    await mkdir(fixture.destinationRoot, { recursive: true })
+    const conflictingIndex = (await readFile(fixture.files.home, "utf8"))
+      .replace("canvas_id: index", "canvas_id: '202'")
+      .replace("courses/101", "courses/202")
+    await writeFile(join(fixture.destinationRoot, "_index.md"), conflictingIndex)
+
+    const plan = await planVaultMigration({ root })
+
+    expect(plan.ready).toBe(false)
+    expect(plan.conflicts[0]?.reason).toContain("does not confirm Canvas course 101")
+    expect(await readFile(fixture.files.assignment, "utf8")).toContain("Synthetic Case")
+  })
+
+  it("preflights conflicts for hidden files before moving any planned content", async () => {
+    const root = await temporaryDirectory("school-agent-vault-migration-hidden-conflict-")
+    const fixture = await writeLegacyFixture(root)
+    const hiddenSource = join(fixture.courseRoot, ".local-state")
+    const hiddenDestination = join(fixture.destinationRoot, ".local-state")
+    await writeFile(hiddenSource, "legacy hidden state\n")
+    await mkdir(fixture.destinationRoot, { recursive: true })
+    await writeFile(join(fixture.destinationRoot, "_index.md"), await readFile(fixture.files.home))
+    await writeFile(hiddenDestination, "protected destination\n")
+
+    const plan = await planVaultMigration({ root })
+
+    expect(plan.ready).toBe(false)
+    expect(
+      plan.conflicts.some((action) => action.destinationRelative === "course-101/.local-state"),
+    ).toBe(true)
+    await expect(executeVaultMigration(plan)).rejects.toThrow("destination conflict")
+    expect(await readFile(fixture.files.assignment, "utf8")).toContain("Synthetic Case")
+    expect(await readFile(hiddenSource, "utf8")).toBe("legacy hidden state\n")
+    expect(await readFile(hiddenDestination, "utf8")).toBe("protected destination\n")
+  })
+
+  it("keeps the v1 marker and requires inspection after a mid-migration failure", async () => {
+    const root = await temporaryDirectory("school-agent-vault-migration-partial-")
+    const fixture = await writeLegacyFixture(root)
+    const plan = await planVaultMigration({ root })
+    const firstMove = plan.moves[0]
+    const secondMove = plan.moves[1]
+    if (firstMove === undefined || secondMove === undefined) {
+      throw new Error("Expected at least two planned migration moves")
+    }
+    await writeFile(secondMove.source, "changed after planning\n")
+
+    await expect(executeVaultMigration(plan)).rejects.toThrow("Source changed after planning")
+
+    expect(await readFile(firstMove.destination, "utf8")).toBeTruthy()
+    expect(await readFile(join(root, "_meta", "layout.json"), "utf8")).toBe(
+      '{"layout_version":1}\n',
+    )
+    const retryPlan = await planVaultMigration({ root })
+    expect(retryPlan.ready).toBe(false)
+    expect(retryPlan.conflicts.length).toBeGreaterThan(0)
+    expect(await readFile(fixture.files.home, "utf8")).toContain("Course home")
+  })
+
+  it("blocks two legacy roots whose confirmed indexes claim the same Canvas course", async () => {
+    const root = await temporaryDirectory("school-agent-vault-migration-duplicate-course-id-")
+    const first = await writeLegacyFixture(root)
+    const secondRoot = join(root, "renamed-code")
+    await mkdir(secondRoot, { recursive: true })
+    await writeFile(join(secondRoot, "_index.md"), await readFile(first.files.home, "utf8"))
+    await writeFile(
+      join(secondRoot, "00-syllabus.md"),
+      document("syllabus-2", "00-syllabus.md", "# Other syllabus\n"),
+    )
+
+    const plan = await planVaultMigration({ root })
+
+    expect(plan.ready).toBe(false)
+    expect(
+      plan.conflicts.some((action) => action.reason.includes("Multiple legacy course roots")),
+    ).toBe(true)
+    expect(await readFile(first.files.assignment, "utf8")).toContain("Synthetic Case")
   })
 })

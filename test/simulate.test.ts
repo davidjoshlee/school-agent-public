@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
@@ -7,7 +7,7 @@ import type { AgentRunner, AgentRunRecord, AgentRunResult } from "../src/agents/
 import type { SchoolConfig } from "../src/config/index.js"
 import { selectModulesForAssignment } from "../src/engines/retrieve-selection.js"
 import { runSimulation } from "../src/engines/simulate.js"
-import { coursePaths } from "../src/store/paths.js"
+import { coursePaths, slugify } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { schoolConfig } from "./helpers/schoolConfig.js"
@@ -26,6 +26,14 @@ function config(root: string): SchoolConfig {
     canvas: { baseUrl: "https://canvas.example.invalid" },
     courses: { pilotCourseId: course.canvasId },
   })
+}
+
+function simulationRunDir(
+  asOf: string,
+  pilotCourseCode = basename(coursePaths("", course.code, course.canvasId).root),
+): string {
+  const weekKey = `${slugify(pilotCourseCode, `course-${course.canvasId}`)}-${slugify(course.canvasId, "unknown")}-${asOf}`
+  return join(weekKey, coursePaths("", course.code, course.canvasId).root)
 }
 
 function document(content: string, dates: Readonly<Record<string, string>>): string {
@@ -144,9 +152,10 @@ async function moduleScopedVault(): Promise<string> {
     "utf8",
   )
   const moduleContent = "Module one\n\n- Assignment: Pricing memo"
-  await mkdir(dirname(join(paths.modules, "week-one.md")), { recursive: true })
+  const modulePath = join(paths.root, "modules", "week-one.md")
+  await mkdir(dirname(modulePath), { recursive: true })
   await writeFile(
-    join(paths.modules, "week-one.md"),
+    modulePath,
     renderVaultDocument(
       createVaultFrontmatter({
         canvasId: "1701",
@@ -163,9 +172,10 @@ async function moduleScopedVault(): Promise<string> {
     "utf8",
   )
   const guidanceContent = "Focus on the decision and its risks."
-  await mkdir(dirname(join(paths.guidance, "prep-guidance.md")), { recursive: true })
+  const guidancePath = join(paths.root, "Resources", "Guidance", "prep-guidance.md")
+  await mkdir(dirname(guidancePath), { recursive: true })
   await writeFile(
-    join(paths.guidance, "prep-guidance.md"),
+    guidancePath,
     renderVaultDocument(
       createVaultFrontmatter({
         canvasId: "gp-1",
@@ -180,12 +190,20 @@ async function moduleScopedVault(): Promise<string> {
     ),
     "utf8",
   )
-  await put(join(paths.assignments, "pricing-memo.md"), "Pricing memo\n\nGroup category: group-1", {
-    due_at: "2025-01-01T00:00:00.000Z",
-  })
-  await put(join(paths.assignments, "other-case.md"), "Other case\n\nGroup category: group-2", {
-    due_at: "2025-01-01T00:00:00.000Z",
-  })
+  await put(
+    join(paths.root, "Assignments", "Pricing memo", "00 Prompt.md"),
+    "Pricing memo\n\nGroup category: group-1",
+    {
+      due_at: "2025-01-01T00:00:00.000Z",
+    },
+  )
+  await put(
+    join(paths.root, "Assignments", "Other case", "00 Prompt.md"),
+    "Other case\n\nGroup category: group-2",
+    {
+      due_at: "2025-01-01T00:00:00.000Z",
+    },
+  )
   return root
 }
 
@@ -241,8 +259,12 @@ async function moduleReleaseVault(): Promise<string> {
 class FixedRunner implements AgentRunner {
   constructor(private readonly result: AgentRunResult) {}
 
-  async run(): Promise<AgentRunResult> {
-    return this.result
+  async run(prompt: string): Promise<AgentRunResult> {
+    const source = [...prompt.matchAll(/^### ([^\n]+\.md)$/gm)]
+      .map((match) => match[1])
+      .find((path) => path !== undefined)
+    const text = this.result.text?.replace("AUTO_SOURCE", source ?? "missing-source.md") ?? null
+    return { ...this.result, text }
   }
 
   async approve(): Promise<AgentRunResult> {
@@ -281,7 +303,7 @@ const prepRunner = new FixedRunner({
   status: "completed",
   text: [
     "## Agenda\nPricing",
-    "## Readings\n- [Case](modules/week-one.md)",
+    "## Readings\n- [Case](AUTO_SOURCE)",
     "## Concepts\nPricing",
     "## Assignments Due\nNone",
     "## Prep Checklist\nRead",
@@ -323,7 +345,11 @@ describe("as-of simulation", () => {
       expect(first.unknownVisibility).toBe(1)
       expect(first.leakageCount).toBe(0)
       expect(first.weeks).toHaveLength(2)
-      expect(first.runDirs).toEqual(["strat-101-2025-01-01", "strat-101-2025-01-08"])
+      const expectedRunDirs = [
+        simulationRunDir("2025-01-01", "strat-101"),
+        simulationRunDir("2025-01-08", "strat-101"),
+      ]
+      expect(first.runDirs).toEqual(expectedRunDirs)
       const firstWeek = first.weeks[0]
       if (firstWeek?.status !== "completed") {
         throw new Error("Expected the first replay week to produce artifacts")
@@ -333,9 +359,7 @@ describe("as-of simulation", () => {
       expect(second.runDirs).toEqual(first.runDirs)
       expect(secondFiles).toEqual(firstFiles)
       expect(await readdir(join(root, "_simulations"))).toEqual([
-        "_meta",
-        "strat-101-2025-01-01",
-        "strat-101-2025-01-08",
+        ...expectedRunDirs.map((runDir) => runDir.split("/")[0] ?? ""),
       ])
       expect(firstFiles.flat().join("\n")).not.toContain("solution-key.md")
     } finally {
@@ -382,9 +406,9 @@ describe("as-of simulation", () => {
       }
 
       // Then: only the module's assignment is drafted, not every visible assignment.
-      expect(result.runDirs).toEqual(["strat-101-2025-01-01"])
+      expect(result.runDirs).toEqual([simulationRunDir("2025-01-01")])
       expect(week.drafts).toHaveLength(1)
-      expect(week.drafts[0]?.path).toBe("Assignments/Undated - pricing-memo/Drafts/pricing-memo.md")
+      expect(week.drafts[0]?.path).toBe("Assignments/Undated - Pricing memo/Drafts/Pricing memo.md")
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -395,7 +419,7 @@ describe("as-of simulation", () => {
     const root = await moduleScopedVault()
     try {
       // When: the week is replayed.
-      await runSimulation({
+      const result = await runSimulation({
         config: config(root),
         weeks: "2025-01-01..2025-01-01",
         runners: { prep: prepRunner, assignment: draftRunner },
@@ -403,12 +427,15 @@ describe("as-of simulation", () => {
       })
 
       // Then: the guidance is present directly in the flat course-week dir so the replay can read it.
-      expect(await readdir(root)).toEqual(["_simulations", "strat-101"])
+      expect(await readdir(root)).toEqual([
+        "_simulations",
+        basename(coursePaths(root, course.code, course.canvasId).root),
+      ])
       const staged = await readFile(
         join(
           root,
           "_simulations",
-          "strat-101-2025-01-01",
+          result.runDirs[0] ?? "missing-run",
           "Resources",
           "Guidance",
           "prep-guidance.md",

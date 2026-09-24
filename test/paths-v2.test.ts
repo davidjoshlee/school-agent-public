@@ -15,23 +15,25 @@ const course = coursePaths("/vault", "DEMO-101", 228564)
 
 describe("v2 vault path interface", () => {
   it("returns a human-first course tree without creating directories", () => {
-    expect(course.home).toBe("/vault/demo-101/00 Home.md")
-    expect(course.resources).toBe("/vault/demo-101/Resources")
-    expect(course.other).toBe("/vault/demo-101/Other")
-    expect(course.assignments).toBe("/vault/demo-101/Assignments")
-    expect(course.assignmentsIndex).toBe("/vault/demo-101/Assignments/00 Assignments.md")
+    expect(course.home).toBe("/vault/course-228564/00 Home.md")
+    expect(course.resources).toBe("/vault/course-228564/Resources")
+    expect(course.other).toBe("/vault/course-228564/Other")
+    expect(course.assignments).toBe("/vault/course-228564/Assignments")
+    expect(course.assignmentsIndex).toBe("/vault/course-228564/Assignments/00 Assignments.md")
+    expect(coursePaths("/vault", "DEMO 101", 999).root).not.toBe(course.root)
+    expect(coursePaths("/vault", "RENAMED COURSE", 228564).root).toBe(course.root)
   })
 
   it("formats dated weeks and milestone containers chronologically", () => {
     const week = weekPaths(course, 1, "2026-09-21T09:00:00.000Z")
-    expect(week.root).toBe("/vault/demo-101/Week 01 - Sep 21")
+    expect(week.root).toBe("/vault/course-228564/Week 01 - Sep 21")
     expect(week.overview).toBe(`${week.root}/${vaultLayout.overview}`)
     expect(week.prep).toBe(`${week.root}/Prep`)
     expect(week.materials).toBe(`${week.root}/Materials`)
     expect(week.other).toBe(`${week.root}/Other`)
 
     const milestone = milestonePaths(course, 2, "Final Reflection")
-    expect(milestone.root).toBe("/vault/demo-101/Milestone 02 - Final Reflection")
+    expect(milestone.root).toBe("/vault/course-228564/Milestone 02 - Final Reflection")
     expect(milestone.overview).toBe(`${milestone.root}/${vaultLayout.overview}`)
   })
 
@@ -41,14 +43,14 @@ describe("v2 vault path interface", () => {
       dueAt: "2026-10-02T23:59:00.000Z",
     })
     expect(assignment.root).toBe(
-      "/vault/demo-101/Assignments/2026-10-02 - Case - Pricing - Trade-offs",
+      "/vault/course-228564/Assignments/2026-10-02 - Case - Pricing - Trade-offs",
     )
     expect(assignment.prompt).toBe(`${assignment.root}/00 Prompt.md`)
     expect(assignment.materials).toBe(`${assignment.root}/Materials`)
     expect(assignment.drafts).toBe(`${assignment.root}/Drafts`)
     expect(assignment.final).toBe(`${assignment.root}/Final`)
     expect(assignment.feedback).toBe(`${assignment.root}/Feedback.md`)
-    expect(assignment.root).not.toContain("228564")
+    expect(assignment.root).toContain("course-228564")
   })
 
   it("routes v2 documents to their period or assignment subtree", () => {
@@ -76,7 +78,7 @@ describe("v2 vault path interface", () => {
       canvasId: "assignment-99",
       assignment: { title: "Pricing Case", dueAt: "2026-10-09" },
     })
-    expect(prompt).toBe("/vault/demo-101/Assignments/2026-10-09 - Pricing Case/00 Prompt.md")
+    expect(prompt).toBe("/vault/course-228564/Assignments/2026-10-09 - Pricing Case/00 Prompt.md")
   })
 
   it("keeps a v1 adapter and uses the containing module identity", () => {

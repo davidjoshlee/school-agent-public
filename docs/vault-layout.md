@@ -16,7 +16,14 @@ school vault migrate --apply
 
 The first command only prints the deterministic plan. `--apply` is an explicit
 opt-in; it moves files without replacing an existing destination and updates
-`_meta/layout.json` only after every move succeeds.
+`_meta/layout.json` only after every move succeeds. Migration includes
+`_index.md`, hidden files, and other unclassified regular files; empty legacy
+directories are intentionally left behind. If the destination already contains
+identical bytes, migration skips that file and leaves the source copy in place.
+After a partial failure, the marker remains v1, but files already moved can make
+a retry conflict (including when `_index.md` was not reached). Inspect the plan
+and vault state and resolve conflicts manually; automatic safe resume is not
+guaranteed.
 
 ## Root metadata
 
@@ -27,10 +34,12 @@ operational course context rather than student-facing material.
 
 ## Course tree
 
-Each course lives in a deterministic, APFS-safe course-code directory:
+Each course lives in a deterministic, APFS-safe `course-<CanvasID>` directory.
+The Canvas ID keeps cross-listed courses with the same course code in separate
+vault roots; the course code remains visible in course metadata and navigation.
 
 ```text
-<course-code>/
+course-17/
 ├── 00 Home.md
 ├── Week 01 - Sep 21/
 │   ├── 00 Overview.md

@@ -10,7 +10,7 @@ import {
   DogfoodFlowSkip,
   type DogfoodSweepSession,
 } from "../src/engines/dogfood-types.js"
-import { coursePaths, dogfoodSweepPaths } from "../src/store/paths.js"
+import { assignmentPaths, coursePaths, dogfoodSweepPaths } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { temporaryDirectory } from "./helpers/tempDir.js"
@@ -22,6 +22,7 @@ async function put(
   canvasId: string,
   content: string,
   dates: Readonly<Record<string, string>> = {},
+  type = "fixture",
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
@@ -30,7 +31,7 @@ async function put(
       createVaultFrontmatter({
         canvasId,
         canvasUrl: `https://canvas.example.invalid/${canvasId}`,
-        type: "fixture",
+        type,
         content,
         dates,
         source: "sync",
@@ -49,29 +50,34 @@ async function put(
 async function threeSessionVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-dogfood-sweep-")
   const paths = coursePaths(root, course.code, course.canvasId)
+  const assignmentPath = (title: string): string => assignmentPaths(paths, { title }).prompt
 
   await put(
-    join(paths.modules, "01-session-2-702", "session-2.md"),
+    join(paths.root, "Week 02 - Oct 02", "00 Overview.md"),
     "702m",
     ["Session 2 - October 2 - Ethics", "", "- Assignment: Ethics Memo (canvas_id: 702)"].join("\n"),
+    {},
+    "module",
   )
-  await put(join(paths.assignments, "ethics-memo.md"), "702", "Ethics memo prompt.")
+  await put(assignmentPath("Ethics Memo"), "702", "Ethics memo prompt.", {}, "assignments")
 
   await put(
-    join(paths.modules, "02-session-1-701", "session-1.md"),
+    join(paths.root, "Week 01 - Sep 25", "00 Overview.md"),
     "701m",
     ["Session 1 - September 25 - Intro", "", "- Assignment: Intro Memo (canvas_id: 701)"].join(
       "\n",
     ),
     { unlock_at: "2025-09-25T00:00:00.000Z" },
+    "module",
   )
-  await put(join(paths.assignments, "intro-memo.md"), "701", "Intro memo prompt.")
+  await put(assignmentPath("Intro Memo"), "701", "Intro memo prompt.", {}, "assignments")
 
   await put(
-    join(paths.modules, "03-session-3-703", "session-3.md"),
+    join(paths.root, "Week 03 - Oct 09", "00 Overview.md"),
     "703m",
     ["Session 3 - Review", "", "- File: Review Slides"].join("\n"),
     { unlock_at: "2025-10-09T00:00:00.000Z" },
+    "module",
   )
 
   return root

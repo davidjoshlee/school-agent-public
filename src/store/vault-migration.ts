@@ -13,7 +13,7 @@ import {
 } from "node:fs/promises"
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path"
 
-import { vaultLayout } from "./paths.js"
+import { coursePaths, vaultLayout } from "./paths.js"
 import { type ParsedVaultDocument, parseVaultDocument } from "./vault-document.js"
 
 /** The legacy layout emitted by the original Canvas sync writer. */
@@ -88,6 +88,7 @@ export type MigrationAction = {
 export type MigrationCoursePlan = {
   readonly courseRoot: string
   readonly courseRelative: string
+  readonly destinationCourseRoot: string
   readonly actions: readonly MigrationAction[]
   readonly warnings: readonly string[]
 }
@@ -167,15 +168,45 @@ export async function planVaultMigration(
   for (const courseRoot of courseRoots) {
     courses.push(await planCourseMigration(root, courseRoot))
   }
-  const actions = courses.flatMap((course) => course.actions)
-  const warnings = courses.flatMap((course) => course.warnings)
+  const rootsByTarget = new Map<string, MigrationCoursePlan[]>()
+  for (const course of courses) {
+    const group = rootsByTarget.get(course.destinationCourseRoot) ?? []
+    group.push(course)
+    rootsByTarget.set(course.destinationCourseRoot, group)
+  }
+  const duplicateTargetRoots = new Set(
+    [...rootsByTarget.values()]
+      .filter((group) => group.length > 1)
+      .flatMap((group) => group.map((course) => course.destinationCourseRoot)),
+  )
+  const safeCourses = await Promise.all(
+    courses.map(async (course) => {
+      if (!duplicateTargetRoots.has(course.destinationCourseRoot)) return course
+      const reason = `Multiple legacy course roots target ${relative(root, course.destinationCourseRoot)}; course identity cannot be merged safely.`
+      return {
+        ...course,
+        actions: [
+          ...course.actions,
+          await identityConflictAction(
+            root,
+            course.courseRoot,
+            reason,
+            course.destinationCourseRoot,
+          ),
+        ],
+        warnings: [...course.warnings, reason],
+      }
+    }),
+  )
+  const actions = safeCourses.flatMap((course) => course.actions)
+  const warnings = safeCourses.flatMap((course) => course.warnings)
   const conflicts = actions.filter((action) => action.kind === "conflict")
   const moves = actions.filter((action) => action.kind === "move")
   return {
     root,
     sourceVersion,
     targetVersion,
-    courses,
+    courses: safeCourses,
     actions,
     warnings,
     conflicts,
@@ -187,8 +218,9 @@ export async function planVaultMigration(
 /**
  * Apply a previously-created plan. All source bytes are checked again before
  * moving, destinations are created exclusively, and layout.json is written
- * only after every move succeeds. A failed move therefore leaves the old
- * version marker in place so the next run can safely resume.
+ * only after every move succeeds. A failed move leaves the old version
+ * marker in place, but may have completed earlier planned moves; inspect the
+ * vault and resolve any resulting conflicts manually before retrying.
  */
 export async function executeVaultMigration(
   plan: VaultMigrationPlan,
@@ -209,6 +241,7 @@ export async function executeVaultMigration(
       await verifyAndMove(action, plan.root)
       moved.push(action)
     }
+    skipped.push(...plan.actions.filter((action) => action.kind === "skip"))
     await writeLayoutMetadata(plan.root, plan.sourceVersion, plan.targetVersion, options.now)
   } catch (error: unknown) {
     throw new VaultMigrationError(
@@ -231,33 +264,186 @@ export async function migrateVault(
 
 async function planCourseMigration(root: string, courseRoot: string): Promise<MigrationCoursePlan> {
   const courseRelative = relative(root, courseRoot).split(sep).join("/")
+  const identity = await findCourseIdentity(root, courseRoot)
+  if (identity.error !== null) {
+    const action = await identityConflictAction(root, courseRoot, identity.error)
+    return {
+      courseRoot,
+      courseRelative,
+      destinationCourseRoot: identity.destinationRoot,
+      actions: [action],
+      warnings: [identity.error],
+    }
+  }
+  const destinationCourseRoot = identity.destinationRoot
   const files = await collectDocumentInfo(courseRoot)
   const modules = moduleRecords(files)
   const assignments = assignmentRecords(files)
   const warnings: string[] = []
   const candidates: CandidateAction[] = []
+  const classifiedPaths = new Set(files.map((file) => file.path))
 
   for (const document of files) {
-    const destination = targetForDocument(document, courseRoot, modules, assignments)
-    if (destination === null) {
-      if (isLegacyOperationalFile(document.relativePath)) continue
+    const legacyDestination = targetForDocument(document, courseRoot, modules, assignments)
+    if (legacyDestination === null) {
+      if (isLegacyOperationalFile(document.relativePath)) {
+        candidates.push({
+          document,
+          destination: join(destinationCourseRoot, document.relativePath),
+          reason: "preserve course-local operational file",
+        })
+        continue
+      }
       warnings.push(`Could not classify ${document.relativePath}; placing it in class-level Other.`)
       candidates.push({
         document,
-        destination: join(courseRoot, vaultLayout.other, basename(document.path)),
+        destination: join(destinationCourseRoot, vaultLayout.other, basename(document.path)),
         reason: "ambiguous content",
       })
       continue
     }
-    if (destination === document.path) continue
+    const destination = join(destinationCourseRoot, relative(courseRoot, legacyDestination))
     candidates.push({ document, destination, reason: targetReason(document, destination, modules) })
+  }
+
+  for (const path of await collectCourseFilePaths(courseRoot)) {
+    if (classifiedPaths.has(path)) continue
+    const entry = await lstat(path)
+    if (!entry.isFile()) {
+      const action = await nonFileConflictAction(root, courseRoot, path)
+      return {
+        courseRoot,
+        courseRelative,
+        destinationCourseRoot,
+        actions: [action],
+        warnings: [`Cannot safely migrate non-file course entry ${relative(courseRoot, path)}.`],
+      }
+    }
+    const bytes = await readFile(path)
+    const relativePath = relative(courseRoot, path).split(sep).join("/")
+    candidates.push({
+      document: {
+        path,
+        relativePath,
+        bytes,
+        digest: digest(bytes),
+        parsed: null,
+        ownership: "unknown",
+        pending: false,
+      },
+      destination: join(destinationCourseRoot, relativePath),
+      reason: "preserve course-local hidden or unclassified file",
+    })
   }
 
   const disambiguated = disambiguateTargets(candidates)
   const actions = await Promise.all(
-    disambiguated.map((candidate) => actionFor(candidate, courseRoot)),
+    disambiguated.map((candidate) => destinationAction(candidate, root)),
   )
-  return { courseRoot, courseRelative, actions, warnings }
+  actions.sort((left, right) => {
+    const leftIsIndex = left.sourceRelative === vaultLayout.index
+    const rightIsIndex = right.sourceRelative === vaultLayout.index
+    return (
+      Number(leftIsIndex) - Number(rightIsIndex) ||
+      left.sourceRelative.localeCompare(right.sourceRelative)
+    )
+  })
+  return { courseRoot, courseRelative, destinationCourseRoot, actions, warnings }
+}
+
+type CourseIdentity = {
+  readonly destinationRoot: string
+  readonly error: string | null
+}
+
+async function findCourseIdentity(root: string, courseRoot: string): Promise<CourseIdentity> {
+  const sourceIndex = join(courseRoot, vaultLayout.index)
+  const sourceIdentity = await readCourseIdentity(sourceIndex)
+  const courseId = sourceIdentity.id
+  const destinationRoot =
+    courseId === null
+      ? join(root, `course-unresolved-${basename(courseRoot)}`)
+      : coursePaths(root, basename(courseRoot), courseId).root
+
+  if (courseId === null) {
+    const error = `Cannot confirm Canvas course identity for ${relative(root, courseRoot) || "."}: ${sourceIdentity.error}`
+    return { destinationRoot, error }
+  }
+
+  if (await pathExists(destinationRoot)) {
+    const destinationIdentity = await readCourseIdentity(join(destinationRoot, vaultLayout.index))
+    if (destinationIdentity.id !== courseId) {
+      return {
+        destinationRoot,
+        error: `Course identity conflict: ${relative(root, courseRoot)} targets existing ${relative(root, destinationRoot)}, whose index does not confirm Canvas course ${courseId}.`,
+      }
+    }
+  }
+  return { destinationRoot, error: null }
+}
+
+async function readCourseIdentity(
+  path: string,
+): Promise<{ readonly id: string | null; readonly error: string }> {
+  try {
+    const document = parseVaultDocument(await readFile(path, "utf8"), path)
+    if (document.frontmatter.type !== vaultLayout.index) {
+      return { id: null, error: "_index.md has the wrong document type" }
+    }
+    const url = new URL(document.frontmatter.canvas_url)
+    const match = /(?:^|\/)courses\/([^/]+)(?:\/|$)/.exec(url.pathname)
+    const urlId = match?.[1] === undefined ? null : decodeURIComponent(match[1])
+    if (urlId === null) return { id: null, error: "_index.md canvas_url has no course ID" }
+    const frontmatterId = document.frontmatter.canvas_id
+    if (frontmatterId !== urlId && frontmatterId !== "index") {
+      return { id: null, error: "_index.md canvas_id and canvas_url disagree" }
+    }
+    return { id: urlId, error: "" }
+  } catch {
+    return { id: null, error: "a valid _index.md with course identity is missing" }
+  }
+}
+
+async function identityConflictAction(
+  root: string,
+  courseRoot: string,
+  reason: string,
+  destinationRoot?: string,
+): Promise<MigrationAction> {
+  const source = join(courseRoot, vaultLayout.index)
+  const sourceBytes = await readFile(source).catch(() => Buffer.from(""))
+  const destination = destinationRoot ?? join(root, `course-unresolved-${basename(courseRoot)}`)
+  return {
+    kind: "conflict",
+    source,
+    destination,
+    sourceRelative: relative(courseRoot, source).split(sep).join("/"),
+    destinationRelative: relative(root, destination),
+    sourceDigest: digest(sourceBytes),
+    sourceCanvasId: null,
+    sourceOwnership: "unknown",
+    pending: false,
+    reason,
+  }
+}
+
+async function nonFileConflictAction(
+  root: string,
+  courseRoot: string,
+  source: string,
+): Promise<MigrationAction> {
+  return {
+    kind: "conflict",
+    source,
+    destination: source,
+    sourceRelative: relative(courseRoot, source).split(sep).join("/"),
+    destinationRelative: relative(root, source).split(sep).join("/"),
+    sourceDigest: "",
+    sourceCanvasId: null,
+    sourceOwnership: "unknown",
+    pending: false,
+    reason: "non-file course entries require manual review before migration",
+  }
 }
 
 type CandidateAction = {
@@ -266,18 +452,14 @@ type CandidateAction = {
   readonly reason: string
 }
 
-function actionFor(candidate: CandidateAction, courseRoot: string): Promise<MigrationAction> {
-  return destinationAction(candidate, courseRoot)
-}
-
 async function destinationAction(
   candidate: CandidateAction,
-  courseRoot: string,
+  vaultRoot: string,
 ): Promise<MigrationAction> {
   const source = candidate.document.path
   const destination = candidate.destination
   const sourceRelative = candidate.document.relativePath
-  const destinationRelative = relative(courseRoot, destination).split(sep).join("/")
+  const destinationRelative = relative(vaultRoot, destination).split(sep).join("/")
   const destinationExists = await pathExists(destination)
   if (!destinationExists) {
     return {
@@ -296,6 +478,20 @@ async function destinationAction(
 
   const destinationBytes = await readFile(destination)
   const destinationDigest = digest(destinationBytes)
+  if (destinationDigest === candidate.document.digest) {
+    return {
+      kind: "skip",
+      source,
+      destination,
+      sourceRelative,
+      destinationRelative,
+      sourceDigest: candidate.document.digest,
+      sourceCanvasId: canvasId(candidate.document),
+      sourceOwnership: candidate.document.ownership,
+      pending: candidate.document.pending,
+      reason: "destination already contains identical bytes",
+    }
+  }
   const destinationInfo = await readDocumentInfo(destination, sourceRelative)
   return {
     kind: "conflict",
@@ -307,10 +503,7 @@ async function destinationAction(
     sourceCanvasId: canvasId(candidate.document),
     sourceOwnership: candidate.document.ownership,
     pending: candidate.document.pending,
-    reason:
-      destinationDigest === candidate.document.digest
-        ? "destination already contains identical bytes; source was left untouched"
-        : `destination exists${ownershipDescription(destinationInfo)}`,
+    reason: `destination exists${ownershipDescription(destinationInfo)}`,
   }
 }
 
@@ -429,7 +622,24 @@ async function discoverCourseRoots(root: string): Promise<readonly string[]> {
 
 async function hasLegacyCourseMarker(directory: string): Promise<boolean> {
   const entries = await safeReadDirectory(directory)
-  return entries.some((entry) => oldCourseMarkers.has(entry.name))
+  const hasOldMarker = entries.some(
+    (entry) => oldCourseMarkers.has(entry.name) && entry.name !== vaultLayout.index,
+  )
+  const hasIndex = entries.some((entry) => entry.name === vaultLayout.index)
+  const hasV2Tree = entries.some((entry) => v2TopLevelDirectories.has(entry.name))
+  if (hasV2Tree && !hasOldMarker) return false
+  return (hasIndex || hasOldMarker) && (await collectCourseFilePaths(directory)).length > 0
+}
+
+async function collectCourseFilePaths(directory: string): Promise<readonly string[]> {
+  const entries = await safeReadDirectory(directory)
+  const paths: string[] = []
+  for (const entry of entries) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) paths.push(...(await collectCourseFilePaths(path)))
+    else paths.push(path)
+  }
+  return paths.sort()
 }
 
 async function collectDocumentInfo(courseRoot: string): Promise<DocumentInfo[]> {

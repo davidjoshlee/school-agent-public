@@ -16,33 +16,33 @@ import { temporaryDirectory } from "./helpers/tempDir.js"
 function populatedIndex() {
   const index = createSchoolIndex({ path: ":memory:" })
   index.upsertCourse({
-    canvasId: "course-finance",
+    canvasId: "1",
     name: "Finance",
     courseCode: "FIN-101",
     workflowState: "available",
-    vaultPath: "fin-101",
+    vaultPath: "course-1",
   })
   index.upsertCourse({
-    canvasId: "course-leadership",
+    canvasId: "2",
     name: "Leadership",
     courseCode: "LEAD-202",
     workflowState: "available",
-    vaultPath: "lead-202",
+    vaultPath: "course-2",
   })
   index.upsertAssignment({
     canvasId: "assignment-base",
-    courseCanvasId: "course-finance",
+    courseCanvasId: "1",
     name: "Case memo",
     dueAt: "2026-10-08T17:00:00Z",
-    vaultPath: "fin-101/assignments/case-memo.md",
+    vaultPath: "course-1/Assignments/2026-10-08 - Case memo/00 Prompt.md",
     allDates: [],
   })
   index.upsertAssignment({
     canvasId: "assignment-override",
-    courseCanvasId: "course-leadership",
+    courseCanvasId: "2",
     name: "Reflection",
     dueAt: "2026-10-09T17:00:00Z",
-    vaultPath: "lead-202/assignments/reflection.md",
+    vaultPath: "course-2/Assignments/2026-10-09 - Reflection/00 Prompt.md",
     allDates: [
       {
         canvasId: "assignment-override:override",
@@ -53,18 +53,18 @@ function populatedIndex() {
   })
   index.upsertAssignment({
     canvasId: "assignment-undated",
-    courseCanvasId: "course-finance",
+    courseCanvasId: "1",
     name: "Optional reading",
     dueAt: null,
-    vaultPath: "fin-101/assignments/optional-reading.md",
+    vaultPath: "course-1/Assignments/Undated - Optional reading/00 Prompt.md",
     allDates: [],
   })
   index.upsertAnnouncement({
     canvasId: "announcement-1",
-    courseCanvasId: "course-finance",
+    courseCanvasId: "1",
     title: "Bring your spreadsheet",
     postedAt: "2026-10-06T12:00:00Z",
-    vaultPath: "fin-101/announcements/spreadsheet.md",
+    vaultPath: "course-1/Other/Announcements/Bring your spreadsheet.md",
   })
   return index
 }

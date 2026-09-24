@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest"
 import { syncCanvas } from "../src/canvas/sync.js"
 import { parseManifest } from "../src/engines/retrieve-files.js"
 import { createSchoolIndex } from "../src/store/db.js"
+import { coursePaths } from "../src/store/paths.js"
 import { parseVaultDocument } from "../src/store/vault.js"
 import { installCourseHandlers } from "./helpers/canvasMock.js"
 import { client } from "./helpers/schoolConfig.js"
@@ -64,7 +65,7 @@ describe("Canvas sync course manifest", () => {
 
     try {
       await syncCanvas(input)
-      const indexPath = join(vaultPath, "manifest-101", "_index.md")
+      const indexPath = coursePaths(vaultPath, "MANIFEST-101", "1").index
       const first = await readFile(indexPath, "utf8")
 
       // When: the same course is synchronized again without source changes.

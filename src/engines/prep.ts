@@ -106,6 +106,13 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
   const requestedPeriod = input.period
   const courseRoot = coursePaths(input.vaultRoot, input.course.code, input.course.canvasId).root
   const selection = await selectModulesForPeriod(courseRoot, requestedPeriod)
+  if (selection.mode !== "module") {
+    throw new PrepPeriodNotFoundError(input.course.code, requestedPeriod)
+  }
+  const placement = prepPeriodPlacement(selection)
+  if (placement === undefined) {
+    throw new PrepPeriodNotFoundError(input.course.code, requestedPeriod)
+  }
   const context = await assembleCourseContext({
     vaultRoot: input.vaultRoot,
     course: { code: input.course.code, canvasId: input.course.canvasId },
@@ -142,10 +149,14 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
     promptFor(input.course, period, context.context, requirements),
   )
   const content = [period.note, generated.text].filter((part) => part.length > 0).join("\n\n")
-  validateBrief(content, new Set(context.sources.map((source) => source.path)), requirements)
+  validateBrief(
+    content,
+    new Set(context.sources.map((source) => source.path)),
+    requirements,
+    context.selectedTexts,
+  )
 
   const runId = randomUUID()
-  const placement = prepPeriodPlacement(selection)
   const result = await new VaultWriter({
     root: input.vaultRoot,
     gitInit: input.config.vault.gitInit,
@@ -173,6 +184,19 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
     fallbackOutputTokens: estimateTokens(generated.text),
   })
   return { path: result.path, period: { kind: period.kind, value: period.value }, model }
+}
+
+export class PrepPeriodNotFoundError extends Error {
+  readonly name = "PrepPeriodNotFoundError"
+
+  constructor(
+    readonly courseCode: string,
+    readonly period: PrepPeriod,
+  ) {
+    super(
+      `No matching Week/Milestone module was found for ${courseCode} ${period.kind} ${period.value}. Prep was not generated; sync the course or choose a period with matching module dates.`,
+    )
+  }
 }
 
 /** Place generated prep beside the module week/milestone selected for its context. */
@@ -353,6 +377,7 @@ function validateBrief(
   content: string,
   sourcePaths: ReadonlySet<string>,
   requirements: ArtifactRequirements,
+  sources: readonly { readonly path: string; readonly text: string }[],
 ): void {
   const { sections, readingsSection, deliverable } = requirements
   for (const section of sections) {
@@ -372,7 +397,12 @@ function validateBrief(
     }
   }
   if (deliverable.kind !== "none") {
-    validateAnswers(content, sections, deliverable.items)
+    validateAnswers(
+      content,
+      sections,
+      deliverable.items,
+      sources.map((source) => source.text),
+    )
   }
 }
 
@@ -389,8 +419,10 @@ function validateAnswers(
   content: string,
   sections: readonly string[],
   items: readonly DeliverableItem[],
+  sourceTexts: readonly string[],
 ): void {
   const body = sectionBody(content, answersSection(sections)) ?? ""
+  const sourceTerms = new Set(sourceTexts.flatMap(contentTerms))
   for (const item of items) {
     const heading = new RegExp(
       `^### ${escapeRegExp(item.id)}\\.\\s*${escapeRegExp(item.text)}\\s*$([\\s\\S]*?)(?=^### |(?![\\s\\S]))`,
@@ -400,7 +432,34 @@ function validateAnswers(
     if (answer.length === 0) {
       throw new PrepContentError(`missing or empty answer for item ${item.id}: ${item.text}`)
     }
+    // This conservative lexical gate catches empty-sounding or generic filler and
+    // requires some answer detail to be present in supplied source material. It
+    // cannot establish semantic correctness; users must still review answers.
+    const answerTerms = new Set(contentTerms(answer))
+    const questionTerms = new Set(contentTerms(item.text))
+    const novelTerms = [...answerTerms].filter((term) => !questionTerms.has(term))
+    const supportedTerms = novelTerms.filter((term) => sourceTerms.has(term))
+    if (answerTerms.size < 5 || novelTerms.length < 3 || supportedTerms.length < 2) {
+      throw new PrepContentError(
+        `answer for item ${item.id} is too generic or lacks clear source overlap; review and answer substantively before retrying`,
+      )
+    }
   }
+}
+
+const answerStopWords = new Set(
+  "a an and are as at be because been being both by can could did do does for from had has have he her here hers him his how i if in into is it its may me might more most my no nor not of on or our ours she should so than that the their theirs them then there these they this those through to too up us very was we were what when where which while who will with would you your yours".split(
+    " ",
+  ),
+)
+
+function contentTerms(value: string): string[] {
+  return (
+    value
+      .toLowerCase()
+      .match(/[a-z][a-z0-9'-]{2,}/g)
+      ?.filter((term) => !answerStopWords.has(term)) ?? []
+  )
 }
 
 function markdownLinksFor(content: string): readonly string[] {

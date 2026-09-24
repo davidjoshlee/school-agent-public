@@ -74,7 +74,10 @@ describe("school ingest CLI", () => {
       expect(written).toContain("2025-10-01")
 
       // And: the manifest gains a row for the new file.
-      const manifest = await readFile(join(vaultPath, "strat-101", "_index.md"), "utf8")
+      const manifest = await readFile(
+        coursePaths(vaultPath, course.code, course.canvasId).index,
+        "utf8",
+      )
       expect(manifest).toContain("Resources/Files/ExampleWorks Exhibit.md")
     } finally {
       log.mockRestore()

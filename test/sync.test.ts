@@ -10,6 +10,7 @@ import { registerSyncCommand } from "../src/canvas/sync-cli.js"
 import { fileIdsFromHtml } from "../src/canvas/sync-render.js"
 import { pilotSnapshot, visibleDocuments } from "../src/engines/simulate-snapshot.js"
 import { createSchoolIndex } from "../src/store/db.js"
+import { coursePaths } from "../src/store/paths.js"
 import { parseVaultDocument } from "../src/store/vault.js"
 import { installCourseHandlers, server } from "./helpers/canvasMock.js"
 import { client, schoolConfig } from "./helpers/schoolConfig.js"
@@ -39,6 +40,10 @@ async function vaultDocumentPath(courseRoot: string, canvasId: string): Promise<
     } catch {}
   }
   throw new Error(`Vault document not found for canvas_id ${canvasId}`)
+}
+
+function defaultCourseRoot(vaultRoot: string): string {
+  return coursePaths(vaultRoot, "FIN-101", "1").root
 }
 
 describe("Canvas sync", () => {
@@ -74,12 +79,12 @@ describe("Canvas sync", () => {
       submissions: 2,
       syncRuns: 1,
     })
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = defaultCourseRoot(vaultPath)
     await expect(
       readFile(await vaultDocumentPath(courseRoot, "21-feedback"), "utf8"),
     ).resolves.toContain("Strong synthesis")
     await expect(
-      readFile(join(vaultPath, "fin-101", "_meta", "course-playbook.md"), "utf8"),
+      readFile(join(courseRoot, "_meta", "course-playbook.md"), "utf8"),
     ).resolves.toContain("Use evidence earlier.")
     index.close()
   })
@@ -100,7 +105,8 @@ describe("Canvas sync", () => {
       maxFileSizeMB: 1,
     }
     await syncCanvas(input)
-    const assignmentPath = await vaultDocumentPath(join(vaultPath, "fin-101"), "21")
+    const courseRoot = defaultCourseRoot(vaultPath)
+    const assignmentPath = await vaultDocumentPath(courseRoot, "21")
     const baselineMtime = (await stat(assignmentPath)).mtimeMs
 
     // When: the unchanged payload is synchronized, then the payload mutates in three independent ways.
@@ -262,7 +268,7 @@ describe("Canvas sync", () => {
       permissionGaps: [{ resource: "quizzes", status: 403 }],
     })
     await expect(
-      readFile(await vaultDocumentPath(join(vaultPath, "fin-101"), "21"), "utf8"),
+      readFile(await vaultDocumentPath(defaultCourseRoot(vaultPath), "21"), "utf8"),
     ).resolves.toContain("Apply the framework.")
     index.close()
   })
@@ -288,18 +294,18 @@ describe("Canvas sync", () => {
 
     // Then: each artifact's canvas_url points at its own document rather than the course home.
     const assignment = parseVaultDocument(
-      await readFile(await vaultDocumentPath(join(vaultPath, "fin-101"), "21"), "utf8"),
+      await readFile(await vaultDocumentPath(defaultCourseRoot(vaultPath), "21"), "utf8"),
     )
     expect(assignment.frontmatter.canvas_url).toBe("https://canvas.test/courses/1/assignments/21")
 
     const page = parseVaultDocument(
-      await readFile(await vaultDocumentPath(join(vaultPath, "fin-101"), "41"), "utf8"),
+      await readFile(await vaultDocumentPath(defaultCourseRoot(vaultPath), "41"), "utf8"),
     )
     expect(page.frontmatter.canvas_url).toBe("https://canvas.test/courses/1/pages/intro")
 
     // The module container has no html_url, so it safely falls back to the course home.
     const module = parseVaultDocument(
-      await readFile(await vaultDocumentPath(join(vaultPath, "fin-101"), "11"), "utf8"),
+      await readFile(await vaultDocumentPath(defaultCourseRoot(vaultPath), "11"), "utf8"),
     )
     expect(module.frontmatter.canvas_url).toBe("https://canvas.test/courses/1")
     index.close()
@@ -349,7 +355,7 @@ describe("Canvas sync", () => {
     // job is to record the raw signal — but with no other date-bearing resource in the course, the
     // as-of clock cannot tell a genuine later addition from a bulk-setup artifact, so it withholds
     // visibility (unknown, counted, never leaked) rather than trusting created_at optimistically.
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = defaultCourseRoot(vaultPath)
     const assignmentPath = await vaultDocumentPath(courseRoot, "23")
     const assignment = parseVaultDocument(await readFile(assignmentPath, "utf8"), assignmentPath)
     expect(assignment.frontmatter.dates.due_at).toBeNull()
@@ -449,7 +455,10 @@ describe("Canvas sync", () => {
 
     // Then: the override path runs the full per-course sync so the vault gets the course written
     // (discovery alone would have matched nothing and silently no-op'd).
-    const assignmentPath = await vaultDocumentPath(join(vaultPath, "w26-ops-101"), "778203")
+    const assignmentPath = await vaultDocumentPath(
+      coursePaths(vaultPath, "W26-OPS-101", "220433").root,
+      "778203",
+    )
     const assignment = parseVaultDocument(await readFile(assignmentPath, "utf8"), assignmentPath)
     expect(assignment.frontmatter.dates.created_at).toBe("2026-02-18T17:00:00Z")
     expect(assignment.frontmatter.dates.due_at).toBeNull()
@@ -508,7 +517,8 @@ describe("Canvas sync", () => {
     }
 
     // Then: the requested course (not the decoy pilot 888888) is the one written to the vault.
-    await expect(readFile(join(vaultPath, "w26-ops-101", "_index.md"), "utf8")).resolves.toContain(
+    const requestedCourseRoot = coursePaths(vaultPath, "W26-OPS-101", "220433").root
+    await expect(readFile(join(requestedCourseRoot, "_index.md"), "utf8")).resolves.toContain(
       "220433",
     )
   })
@@ -589,9 +599,9 @@ describe("Canvas sync", () => {
     // Then: only the allowlisted course lands in the vault/index (course "2" is never fetched;
     // msw's onUnhandledRequest: "error" would fail the test if it were).
     await expect(
-      readFile(join(vaultPath, "fin-101", "Resources", "Syllabus.md"), "utf8"),
+      readFile(join(defaultCourseRoot(vaultPath), "Resources", "Syllabus.md"), "utf8"),
     ).resolves.toContain("Syllabus")
-    await expect(stat(join(vaultPath, "oth-2"))).rejects.toThrow()
+    await expect(stat(coursePaths(vaultPath, "OTH-2", "2").root)).rejects.toThrow()
     const index = createSchoolIndex({ path: join(vaultPath, "school.sqlite") })
     expect(index.counts().courses).toBe(1)
     index.close()
@@ -667,13 +677,13 @@ describe("Canvas sync", () => {
     })
     expect(metadataGets).toBe(1)
     expect(downloads).toBe(1)
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = defaultCourseRoot(vaultPath)
     const filePath = await vaultDocumentPath(courseRoot, "51")
     const fileDocument = parseVaultDocument(await readFile(filePath, "utf8"), filePath)
     expect(fileDocument.frontmatter.type).toBe("files")
     expect(fileDocument.frontmatter.canvas_url).toBe("https://canvas.test/api/v1/files/51/download")
     expect(fileDocument.content).toContain("Synthetic PDF ground truth")
-    const manifest = await readFile(join(vaultPath, "fin-101", "_index.md"), "utf8")
+    const manifest = await readFile(join(courseRoot, "_index.md"), "utf8")
     expect(manifest).toContain(relative(courseRoot, filePath))
     expect(manifest).toMatch(/\| files \|/)
     expect(index.counts().files).toBe(1)
@@ -769,7 +779,7 @@ describe("Canvas sync", () => {
     expect(report.courses[0]?.status).toBe("synced")
     expect(metadataGets).toBe(1)
     expect(downloads).toBe(1)
-    const emptyFilePath = await vaultDocumentPath(join(vaultPath, "fin-101"), "53")
+    const emptyFilePath = await vaultDocumentPath(defaultCourseRoot(vaultPath), "53")
     const fileDocument = parseVaultDocument(await readFile(emptyFilePath, "utf8"), emptyFilePath)
     expect(fileDocument.frontmatter.type).toBe("files")
     expect(fileDocument.frontmatter.canvas_url).toBe("https://canvas.test/courses/1")
@@ -858,7 +868,7 @@ describe("Canvas sync", () => {
     expect(report.courses[0]?.status).toBe("synced")
     expect(metadataGets).toBe(1)
     expect(downloads).toBe(1)
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = defaultCourseRoot(vaultPath)
     const filePath = await vaultDocumentPath(courseRoot, "777")
     const fileDocument = parseVaultDocument(await readFile(filePath, "utf8"), filePath)
     expect(fileDocument.frontmatter.type).toBe("files")
@@ -955,7 +965,7 @@ describe("Canvas sync", () => {
     expect(report.courses[0]?.status).toBe("synced")
     expect(metadataGets).toBe(1)
     expect(downloads).toBe(1)
-    const secondFilePath = await vaultDocumentPath(join(vaultPath, "fin-101"), "778")
+    const secondFilePath = await vaultDocumentPath(defaultCourseRoot(vaultPath), "778")
     const fileDocument = parseVaultDocument(await readFile(secondFilePath, "utf8"), secondFilePath)
 
     // Then: fileArtifactDates() resolves created_at from the file's own updated_at (it never had
@@ -1050,7 +1060,7 @@ describe("Canvas sync", () => {
     expect(pageFileDownloads).toBe(1)
     expect(syllabusFileGets).toBe(1)
     expect(syllabusFileDownloads).toBe(1)
-    const courseRoot = join(vaultPath, "fin-101")
+    const courseRoot = defaultCourseRoot(vaultPath)
     const pageFilePath = await vaultDocumentPath(courseRoot, "901")
     const pageFileDocument = parseVaultDocument(await readFile(pageFilePath, "utf8"), pageFilePath)
     expect(pageFileDocument.frontmatter.type).toBe("files")

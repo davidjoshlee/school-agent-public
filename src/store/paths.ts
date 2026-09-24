@@ -258,7 +258,9 @@ export function vaultPaths(root: string): VaultPaths {
 }
 
 /**
- * Return the v2 human-facing course tree. This function only computes
+ * Return the v2 human-facing course tree. The Canvas course ID is part of
+ * the root identity so cross-listed or duplicated course codes cannot share
+ * one vault directory. This function only computes
  * strings; it never creates directories. Writers create a period or an
  * assignment subtree only when they have an artifact to place in it.
  */
@@ -267,7 +269,7 @@ export function coursePaths(
   courseCode: string,
   courseId: string | number,
 ): CoursePaths {
-  const course = join(root, slugify(courseCode, `untitled-${courseId}`))
+  const course = join(root, `course-${slugify(String(courseId), "unknown")}`)
   const metadata = join(course, vaultLayout.metadata)
   const legacy = legacyCoursePaths(root, courseCode, courseId)
   const resources = join(course, vaultLayout.resources)

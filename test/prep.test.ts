@@ -11,7 +11,6 @@ import {
   generatePrepBrief,
   PrepContentError,
   PrepGenerationError,
-  PrepNoMaterialsError,
   prepPeriodPlacement,
 } from "../src/engines/prep.js"
 import { SpendCapExceededError } from "../src/models/cost.js"
@@ -58,12 +57,12 @@ function config(granularity: "week" | "session" = "week"): SchoolConfig {
   })
 }
 
-function document(content: string): string {
+function document(content: string, dates: VaultFrontmatter["dates"] = {}): string {
   const frontmatter: VaultFrontmatter = {
     canvas_id: "fixture",
     canvas_url: "https://canvas.example.invalid/resource",
     type: "fixture",
-    dates: {},
+    dates,
     content_hash: createHash("sha256").update(content).digest("hex"),
     source: "sync",
     status: "approved",
@@ -73,9 +72,13 @@ function document(content: string): string {
   return renderVaultDocument(frontmatter, content)
 }
 
-async function put(path: string, content: string): Promise<void> {
+async function put(
+  path: string,
+  content: string,
+  dates: VaultFrontmatter["dates"] = {},
+): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
-  await writeFile(path, document(content), "utf8")
+  await writeFile(path, document(content, dates), "utf8")
 }
 
 async function fixtureVault(syllabus = "Week 1: Pricing under uncertainty."): Promise<string> {
@@ -86,6 +89,14 @@ async function fixtureVault(syllabus = "Week 1: Pricing under uncertainty."): Pr
   await put(join(paths.guidance, "prep-guidance.md"), "Focus on the decision and its risks.")
   await put(
     join(paths.modules, "01-pricing", "pricing-case.md"),
+    "Week 1 agenda: price the new product using contribution margin. The case describes marginal revenue, marginal cost, rival price cuts, and price-sensitive buyers across distinct routes.",
+  )
+  const week = join(paths.root, "Week 01 - Sep 08")
+  await put(join(week, "Module.md"), "Week 1: Pricing\n- Page: Pricing Case", {
+    unlock_at: "2026-09-08T00:00:00.000Z",
+  })
+  await put(
+    join(week, "pricing-case.md"),
     "Week 1 agenda: price the new product using contribution margin.",
   )
   await put(
@@ -93,7 +104,7 @@ async function fixtureVault(syllabus = "Week 1: Pricing under uncertainty."): Pr
     [
       "| title | type | dates | path | token estimate |",
       "| --- | --- | --- | --- | --- |",
-      "| Pricing case | module | 2026-09-08 | modules/01-pricing/pricing-case.md | 30 |",
+      "| Pricing case | module | 2026-09-08 | Week 01 - Sep 08/pricing-case.md | 30 |",
     ].join("\n"),
   )
   return root
@@ -119,7 +130,7 @@ const brief = [
   "## Agenda",
   "- Price the new product.",
   "## Readings",
-  "- [Pricing case](modules/01-pricing/pricing-case.md)",
+  "- [Pricing case](Week 01 - Sep 08/pricing-case.md)",
   "## Concepts",
   "- Contribution margin",
   "## Assignments Due",
@@ -153,7 +164,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: config(),
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: runner(join(root, ".agent-runs"), brief),
         triage: { summarize: async () => "unused" },
@@ -171,7 +182,7 @@ describe("generatePrepBrief", () => {
         readFile(
           join(
             coursePaths(root, course.code, course.canvasId).root,
-            "modules/01-pricing/pricing-case.md",
+            "Week 01 - Sep 08/pricing-case.md",
           ),
           "utf8",
         ),
@@ -211,7 +222,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: pricedConfig,
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: runner(join(root, ".agent-runs"), brief),
         triage: { summarize: async () => "unused" },
@@ -240,7 +251,7 @@ describe("generatePrepBrief", () => {
       "## Agenda",
       "- Price the new product.",
       "## Readings",
-      "- [Pricing case](modules/01-pricing/pricing-case.md)",
+      "- [Pricing case](Week 01 - Sep 08/pricing-case.md)",
       "## Concepts",
       "- Contribution margin is price minus variable cost; the case uses it as the price floor.",
       "## Assignments Due",
@@ -271,7 +282,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: config(),
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: capturingRunner,
         triage: { summarize: async () => "unused" },
@@ -311,7 +322,7 @@ describe("generatePrepBrief", () => {
       "## Agenda",
       "- Price the new product.",
       "## Required Readings",
-      "- [Pricing case](modules/01-pricing/pricing-case.md)",
+      "- [Pricing case](Week 01 - Sep 08/pricing-case.md)",
       "## Key Takeaway",
       "- Contribution margin drives the price.",
     ].join("\n")
@@ -322,7 +333,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: config(),
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: runner(join(root, ".agent-runs"), customBrief),
         triage: { summarize: async () => "unused" },
@@ -351,7 +362,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: config(),
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: runner(join(root, ".agent-runs"), brief),
         triage: { summarize: async () => "unused" },
@@ -403,7 +414,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: config(),
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: runner(join(root, ".agent-runs"), fabricatedBrief),
         triage: { summarize: async () => "unused" },
@@ -417,29 +428,42 @@ describe("generatePrepBrief", () => {
     }
   })
 
-  it("records an override and falls back to a weekly brief when a requested session has no schedule", async () => {
-    // Given: session-level prep is configured, but the syllabus has no session structure.
+  it("fails before generation when an explicitly requested session has no matching module", async () => {
+    // Given: session-level prep is configured, but the vault has no matching session module.
     const root = await fixtureVault("Course overview without a meeting schedule.")
     const index = createSchoolIndex({ path: ":memory:" })
     try {
-      // When: session 2 is requested with a valid per-run model override.
-      const result = await generatePrepBrief({
+      let called = false
+      const attempt = generatePrepBrief({
         vaultRoot: root,
         config: config("session"),
         course,
         period: { kind: "session", value: "2" },
         modelOverride: "openai/gpt-4.1-mini",
         index,
-        runner: runner(join(root, ".agent-runs"), brief),
+        runner: {
+          run: async () => {
+            called = true
+            throw new Error("must not run")
+          },
+        } as never,
         triage: { summarize: async () => "unused" },
       })
 
-      // Then: the stored frontmatter preserves the effective model and the fallback is visible.
-      const output = parseVaultDocument(await readFile(result.path, "utf8"), result.path)
-      expect(output.frontmatter.model).toBe("openai/gpt-4.1-mini")
-      expect(output.content).toContain(
-        "Session structure was not detected; generated a week-level brief.",
-      )
+      // Then: it reports the mismatch without generation or an Other/Prep write.
+      await expect(attempt).rejects.toThrow("No matching Week/Milestone module")
+      expect(called).toBe(false)
+      await expect(
+        readFile(
+          join(
+            coursePaths(root, course.code, course.canvasId).root,
+            "Other",
+            "Prep",
+            "Session 2.md",
+          ),
+          "utf8",
+        ),
+      ).rejects.toThrow()
     } finally {
       index.close()
       await rm(root, { recursive: true, force: true })
@@ -450,6 +474,8 @@ describe("generatePrepBrief", () => {
     // Given: an empty manifest, then a model transport failure for an otherwise valid course.
     const root = await fixtureVault()
     const paths = coursePaths(root, course.code, course.canvasId)
+    await rm(join(paths.root, "Week 01 - Sep 08", "Module.md"))
+    await rm(join(paths.root, "Week 01 - Sep 08", "pricing-case.md"))
     await put(
       paths.index,
       "| title | type | dates | path | token estimate |\n| --- | --- | --- | --- | --- |",
@@ -461,23 +487,31 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: config(),
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: runner(join(root, ".agent-runs"), brief),
         triage: { summarize: async () => "unused" },
       })
 
-      // Then: the expected failure names the material state.
-      await expect(noMaterials).rejects.toBeInstanceOf(PrepNoMaterialsError)
+      // Then: an explicit period without a module match fails safely.
+      await expect(noMaterials).rejects.toThrow("No matching Week/Milestone module")
 
       await put(
         paths.index,
         [
           "| title | type | dates | path | token estimate |",
           "| --- | --- | --- | --- | --- |",
-          "| Pricing case | module | 2026-09-08 | modules/01-pricing/pricing-case.md | 30 |",
+          "| Pricing case | module | 2026-09-08 | Week 01 - Sep 08/pricing-case.md | 30 |",
         ].join("\n"),
       )
+      await put(
+        join(paths.root, "Week 01 - Sep 08", "Module.md"),
+        "Week 1: Pricing\n- Page: Pricing Case",
+        {
+          unlock_at: "2026-09-08T00:00:00.000Z",
+        },
+      )
+      await put(join(paths.root, "Week 01 - Sep 08", "pricing-case.md"), "Pricing case content.")
       const failedRunner = new AISDKAgentRunner({
         runsDir: join(root, ".agent-runs-failed"),
         tools: {},
@@ -495,7 +529,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: config(),
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: failedRunner,
         triage: { summarize: async () => "unused" },
@@ -545,7 +579,7 @@ describe("generatePrepBrief", () => {
         vaultRoot: root,
         config: cappedConfig,
         course,
-        period: { kind: "week", value: "1" },
+        period: { kind: "week", value: "2026-09-08" },
         index,
         runner: cappedRunner,
         triage: {
@@ -566,6 +600,7 @@ describe("generatePrepBrief", () => {
 
   const cuePricingCase = [
     "Week 1 agenda: price the new product using contribution margin.",
+    "Set price where marginal revenue equals marginal cost; contribution margin gives a floor. The case describes price-sensitive buyers, distinct routes, and cautions against responding to every rival price cut.",
     "Prepare your answers to the following questions:",
     "1. What price maximizes contribution margin?",
     "2. How should the team handle rival price cuts?",
@@ -581,6 +616,14 @@ describe("generatePrepBrief", () => {
       ),
       cuePricingCase,
     )
+    await put(
+      join(
+        coursePaths(root, course.code, course.canvasId).root,
+        "Week 01 - Sep 08",
+        "pricing-case.md",
+      ),
+      cuePricingCase,
+    )
     return root
   }
 
@@ -591,7 +634,7 @@ describe("generatePrepBrief", () => {
       briefWithoutAnswers,
       "## Answers",
       "### 1. What price maximizes contribution margin?",
-      "The price setting marginal revenue equal to marginal cost.",
+      "Set price where marginal revenue equals marginal cost; contribution margin gives a floor.",
       `### 2. How should the team handle rival price cuts?\n${secondAnswer}`,
     ].join("\n")
   }
@@ -607,7 +650,7 @@ describe("generatePrepBrief", () => {
           vaultRoot: root,
           config: config(),
           course,
-          period: { kind: "week", value: "1" },
+          period: { kind: "week", value: "2026-09-08" },
           index,
           runner: runner(join(root, ".agent-runs"), briefWithAnswers("")),
           triage: { summarize: async () => "unused" },
@@ -622,7 +665,7 @@ describe("generatePrepBrief", () => {
       }
     })
 
-    it("passes when every detected item is answered under an injected Answers section", async () => {
+    it("passes when every detected item has substantive source-linked detail under Answers", async () => {
       // Given: the same cue, but a brief that answers both items in full.
       const root = await fixtureVaultWithCue()
       const index = createSchoolIndex({ path: ":memory:" })
@@ -631,11 +674,13 @@ describe("generatePrepBrief", () => {
           vaultRoot: root,
           config: config(),
           course,
-          period: { kind: "week", value: "1" },
+          period: { kind: "week", value: "2026-09-08" },
           index,
           runner: runner(
             join(root, ".agent-runs"),
-            briefWithAnswers("Match selectively only on price-sensitive routes."),
+            briefWithAnswers(
+              "Match selectively only on price-sensitive buyers and distinct routes; the case warns against responding to every rival price cut.",
+            ),
           ),
           triage: { summarize: async () => "unused" },
         })
@@ -644,7 +689,43 @@ describe("generatePrepBrief", () => {
         const output = parseVaultDocument(await readFile(result.path, "utf8"), result.path)
         expect(output.content).toContain("## Answers")
         expect(output.content).toContain("### 1. What price maximizes contribution margin?")
-        expect(output.content).toContain("Match selectively only on price-sensitive routes.")
+        expect(output.content).toContain("Match selectively only on price-sensitive buyers")
+      } finally {
+        index.close()
+        await rm(root, { recursive: true, force: true })
+      }
+    })
+
+    it("refuses to mark generic filler answers auto-final", async () => {
+      const root = await fixtureVaultWithCue()
+      const index = createSchoolIndex({ path: ":memory:" })
+      try {
+        const attempt = generatePrepBrief({
+          vaultRoot: root,
+          config: config(),
+          course,
+          period: { kind: "week", value: "2026-09-08" },
+          index,
+          runner: runner(
+            join(root, ".agent-runs"),
+            briefWithAnswers(
+              "Both effects in the readings are important research concepts and should be considered carefully.",
+            ),
+          ),
+          triage: { summarize: async () => "unused" },
+        })
+        await expect(attempt).rejects.toThrow("too generic or lacks clear source overlap")
+        await expect(
+          readFile(
+            join(
+              coursePaths(root, course.code, course.canvasId).root,
+              "Week 01 - Sep 08",
+              "Prep",
+              "week 2026-09-08.md",
+            ),
+            "utf8",
+          ),
+        ).rejects.toThrow()
       } finally {
         index.close()
         await rm(root, { recursive: true, force: true })
@@ -668,7 +749,7 @@ describe("generatePrepBrief", () => {
           vaultRoot: root,
           config: config(),
           course,
-          period: { kind: "week", value: "1" },
+          period: { kind: "week", value: "2026-09-08" },
           index,
           runner: runner(join(root, ".agent-runs"), briefWithoutAnswers),
           triage: { summarize: async () => "unused" },
@@ -710,7 +791,7 @@ describe("generatePrepBrief", () => {
           vaultRoot: root,
           config: config(),
           course,
-          period: { kind: "week", value: "1" },
+          period: { kind: "week", value: "2026-09-08" },
           index,
           runner: runner(join(root, ".agent-runs"), customBrief),
           triage: { summarize: async () => "unused" },
@@ -737,7 +818,7 @@ describe("generatePrepBrief", () => {
           vaultRoot: root,
           config: config(),
           course,
-          period: { kind: "week", value: "1" },
+          period: { kind: "week", value: "2026-09-08" },
           index,
           runner: runner(join(root, ".agent-runs"), brief),
           triage: { summarize: async () => "unused" },
