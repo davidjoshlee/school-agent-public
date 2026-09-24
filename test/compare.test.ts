@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest"
 import type { SchoolConfig } from "../src/config/index.js"
 import { renderAssignmentProvenance } from "../src/engines/assignment-provenance.js"
 import { compareSimulation } from "../src/engines/compare.js"
-import { coursePaths, slugify } from "../src/store/paths.js"
+import { coursePaths, slugify, vaultLayout } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { schoolConfig } from "./helpers/schoolConfig.js"
@@ -31,12 +31,12 @@ function simulationRunId(asOf = "2025-01-01"): string {
   return join(weekKey, coursePaths("", course.code, course.canvasId).root)
 }
 
-function vaultDocument(content: string): string {
+function vaultDocument(content: string, canvasId = "fixture", type = "fixture"): string {
   return renderVaultDocument(
     createVaultFrontmatter({
-      canvasId: "fixture",
+      canvasId,
       canvasUrl: "https://canvas.example.invalid/resource",
-      type: "fixture",
+      type,
       content,
       dates: { created_at: "2025-01-01T00:00:00.000Z" },
       source: "sync",
@@ -73,7 +73,7 @@ async function fixtureVault(withFeedback: boolean): Promise<string> {
   )
   if (withFeedback) {
     await write(
-      join(paths.assignments, "pricing-memo.feedback.md"),
+      join(paths.assignments, "Undated - Pricing memo", "Feedback.md"),
       vaultDocument(
         [
           "Rubric assessment:",
@@ -82,6 +82,8 @@ async function fixtureVault(withFeedback: boolean): Promise<string> {
           JSON.stringify({ "market-analysis": { points: 5 }, evidence: { points: 0 } }),
           "```",
         ].join("\n"),
+        "assignment-1-feedback",
+        "feedback",
       ),
     )
   }
@@ -172,6 +174,33 @@ describe("simulation ground-truth comparison", () => {
 
       // Then: the artifact remains scorecard-ready and explicitly has no ground truth.
       expect(await readFile(result.comparisonPath, "utf8")).toContain("no ground truth")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("keeps reading legacy flat feedback on case-sensitive filesystems", async () => {
+    const root = await fixtureVault(false)
+    const paths = coursePaths(root, course.code, course.canvasId)
+    try {
+      await write(
+        join(paths.root, vaultLayout.assignments, `pricing-memo${vaultLayout.feedback}`),
+        vaultDocument(
+          [
+            "Rubric assessment:",
+            "",
+            "```json",
+            JSON.stringify({ evidence: { points: 0 } }),
+            "```",
+          ].join("\n"),
+          "assignment-1-feedback",
+          "feedback",
+        ),
+      )
+      const result = await compareSimulation({ config: config(root), runId: simulationRunId() })
+      expect(await readFile(result.comparisonPath, "utf8")).toMatch(
+        /\| evidence \| missed-but-flagged \|/,
+      )
     } finally {
       await rm(root, { recursive: true, force: true })
     }
