@@ -22,6 +22,8 @@ const allowedDependencyNames = [
   "turndown",
   "tsx",
   "typescript",
+  // Pin Vitest's Vite peer to the Node 22-compatible major for source installs.
+  "vite",
   "vitest",
   "zod",
 ] as const
