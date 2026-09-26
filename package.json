@@ -1,6 +1,6 @@
 {
   "name": "school-agent",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Local-first command-line agent for reading Canvas course material into a Markdown vault.",
   "private": true,
   "license": "MIT",

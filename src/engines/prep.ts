@@ -436,6 +436,12 @@ function validateAnswers(
     // requires some answer detail to be present in supplied source material. It
     // cannot establish semantic correctness; users must still review answers.
     const answerTerms = new Set(contentTerms(answer))
+    // A prep brief must not invent an answer when the supplied material does
+    // not contain one. Make that limitation explicit so it remains visible in
+    // the auto-delivered artifact and still counts as addressing the question.
+    if (isUnableToAnswer(answer)) {
+      continue
+    }
     const questionTerms = new Set(contentTerms(item.text))
     const novelTerms = [...answerTerms].filter((term) => !questionTerms.has(term))
     const supportedTerms = novelTerms.filter((term) => sourceTerms.has(term))
@@ -445,6 +451,14 @@ function validateAnswers(
       )
     }
   }
+}
+
+function isUnableToAnswer(answer: string): boolean {
+  return (
+    /\b(?:unable|cannot|can't|could not|not possible)\b[\s\S]{0,100}\b(?:answer|determine|establish|infer|tell|find|identify)\b/i.test(
+      answer,
+    ) || /\b(?:not|no) (?:enough|sufficient) (?:information|evidence|detail)\b/i.test(answer)
+  )
 }
 
 const answerStopWords = new Set(
