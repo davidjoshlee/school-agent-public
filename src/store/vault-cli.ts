@@ -2,6 +2,10 @@ import type { Command } from "commander"
 
 import type { RootOptions } from "../cli.js"
 import { loadConfig } from "../config/index.js"
+import {
+  executeCourseRootMigration,
+  planCourseRootMigration,
+} from "./vault-course-root-migration.js"
 import { executeVaultMigration, planVaultMigration } from "./vault-migration.js"
 
 export function registerVaultCommand(program: Command): void {
@@ -31,5 +35,27 @@ export function registerVaultCommand(program: Command): void {
     }
     const result = await executeVaultMigration(plan)
     console.log(`Applied migration: moved ${result.moved.length} file(s).`)
+  })
+
+  const migrateRoots = vault
+    .command("migrate-roots")
+    .description("Plan legacy v2 course-code root moves to stable Canvas-ID roots")
+    .option("--apply", "apply the planned moves; without this flag nothing is changed")
+  migrateRoots.action(async () => {
+    const configuration = loadConfig(program.opts<RootOptions>().config)
+    const plan = await planCourseRootMigration(configuration.vault.path)
+    console.log(
+      `Course-root migration: ${plan.moves.length} move(s), ${plan.conflicts.length} conflict(s).`,
+    )
+    for (const move of plan.moves) {
+      console.log(`MOVE ${move.source} -> ${move.destination}`)
+    }
+    for (const conflict of plan.conflicts) console.error(`CONFLICT ${conflict}`)
+    if (migrateRoots.opts<{ readonly apply?: boolean }>().apply !== true) {
+      console.log("Dry run only; pass --apply to move course roots and rebase the local index.")
+      return
+    }
+    const moved = await executeCourseRootMigration(plan, configuration.index.path)
+    console.log(`Applied course-root migration: moved ${moved.length} course root(s).`)
   })
 }
