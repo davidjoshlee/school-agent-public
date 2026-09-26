@@ -26,8 +26,20 @@ function fixture() {
   tempRoots.push(base)
   const candidate = join(base, "candidate")
   mkdirSync(join(candidate, "bin"), { recursive: true })
-  cpSync(join(project, "dist"), join(candidate, "dist"), { recursive: true })
-  cpSync(join(project, "config"), join(candidate, "config"), { recursive: true })
+  mkdirSync(join(candidate, "dist", "store"), { recursive: true })
+  writeFileSync(
+    join(candidate, "dist", "store", "db-schema.js"),
+    "export function migrateIndex() {}\n",
+  )
+  writeFileSync(
+    join(candidate, "dist", "index.js"),
+    `import { existsSync, writeFileSync } from "node:fs";
+const args = process.argv.slice(2);
+const config = args[args.indexOf("--config") + 1];
+if (args.includes("setup")) writeFileSync(config, "{}\\n");
+if (args.includes("doctor") && !existsSync(config)) process.exitCode = 1;
+`,
+  )
   cpSync(join(project, "bin/school.js"), join(candidate, "bin/school.js"))
   symlinkSync(join(project, "node_modules"), join(candidate, "node_modules"), "dir")
   writeFileSync(join(candidate, "package.json"), '{"type":"module"}\n')
