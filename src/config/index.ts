@@ -1,4 +1,12 @@
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
+import { randomUUID } from "node:crypto"
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { homedir } from "node:os"
 import { dirname, relative, resolve } from "node:path"
 
@@ -80,12 +88,47 @@ const userConfigSchema = z.strictObject({
   renew: z.strictObject({ warnDaysBefore: z.number().int().positive().default(5) }).prefault({}),
   files: z.strictObject({ maxSizeMB: z.number().positive().default(100) }).prefault({}),
   prep: z.strictObject({ granularity: z.enum(["week", "session"]).default("week") }).prefault({}),
+  autoPrep: z
+    .strictObject({
+      enabled: z.boolean().default(false),
+      timeZone: z
+        .string()
+        .refine((value) => {
+          try {
+            new Intl.DateTimeFormat("en-US", { timeZone: value })
+            return true
+          } catch {
+            return false
+          }
+        }, "Use a valid IANA time zone")
+        .default("UTC"),
+      leadHours: z.number().int().min(1).max(168).default(24),
+      windowHours: z.number().int().min(1).max(48).default(24),
+      standingOverrides: z
+        .record(z.string(), z.enum(["enrolled", "waitlisted", "old"]))
+        .default({}),
+      meetings: z
+        .array(
+          z
+            .strictObject({
+              courseCanvasId: z.string().min(1),
+              daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1),
+              localTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+              startsOn: z.iso.date(),
+              endsOn: z.iso.date(),
+            })
+            .refine((value) => value.startsOn <= value.endsOn, "Meeting date range is reversed"),
+        )
+        .default([]),
+    })
+    .prefault({}),
 })
 
 export type ModelFunction = z.infer<typeof modelFunctionSchema>
 export type SchoolConfig = Omit<z.infer<typeof userConfigSchema>, "models"> & {
   readonly models: z.infer<typeof defaultModelsSchema>["models"]
 }
+export type AutoPrepConfig = SchoolConfig["autoPrep"]
 
 export class ConfigError extends Error {
   readonly name: string = "ConfigError"
@@ -221,4 +264,29 @@ function persistCourses(configPath: string, changes: Partial<SchoolConfig["cours
     )}\n`,
     "utf8",
   )
+}
+
+/** Mutate only auto-prep settings, validate the whole config, then replace it atomically. */
+export function updateAutoPrepConfig(
+  configPath: string,
+  change: (current: AutoPrepConfig) => AutoPrepConfig,
+): AutoPrepConfig {
+  const path = resolve(configPath)
+  const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>
+  const current = parseUserConfig(JSON.stringify(raw)).autoPrep
+  const next = change(current)
+  const updated = { ...raw, autoPrep: next }
+  parseUserConfig(JSON.stringify(updated))
+  const temporary = `${path}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(temporary, `${JSON.stringify(updated, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    })
+    renameSync(temporary, path)
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary)
+  }
+  return next
 }

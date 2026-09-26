@@ -47,6 +47,10 @@ export type GeneratePrepBriefInput = {
   readonly config: SchoolConfig
   readonly course: PrepCourse
   readonly period: PrepPeriod
+  /** Interpret an explicit week date in this IANA zone (scheduled prep only). */
+  readonly periodTimeZone?: string
+  /** Used by unattended prep so a concurrent/manual artifact is never replaced. */
+  readonly preserveExisting?: boolean
   readonly modelOverride?: string
   readonly index: SchoolIndex
   readonly runner: AgentRunner
@@ -105,7 +109,9 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
   const model = prepModel(input.config, input.modelOverride)
   const requestedPeriod = input.period
   const courseRoot = coursePaths(input.vaultRoot, input.course.code, input.course.canvasId).root
-  const selection = await selectModulesForPeriod(courseRoot, requestedPeriod)
+  const selection = await selectModulesForPeriod(courseRoot, requestedPeriod, {
+    ...(input.periodTimeZone === undefined ? {} : { timeZone: input.periodTimeZone }),
+  })
   if (selection.mode !== "module") {
     throw new PrepPeriodNotFoundError(input.course.code, requestedPeriod)
   }
@@ -171,8 +177,12 @@ export async function generatePrepBrief(input: GeneratePrepBriefInput): Promise<
     source: vaultSources.agent,
     status: vaultStatuses.autoFinal,
     model,
+    ...(input.preserveExisting === true ? { preserveExisting: true } : {}),
     ...(placement === undefined ? {} : { period: placement }),
   })
+  if (input.preserveExisting === true && result.kind === "skipped") {
+    throw new PrepContentError("a prep artifact already exists at the target path")
+  }
   recordModelUsage({
     index: input.index,
     model,

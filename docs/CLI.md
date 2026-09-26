@@ -88,6 +88,25 @@ school-agent approve <run-id>
 
 Review every output. Source selection, calculation logs, and provenance can help you inspect a result, but they are not correctness or policy-compliance guarantees. AI-policy metadata is informational and does not grant permission to use AI.
 
+## Class schedule and automatic prep
+
+| Command | Purpose |
+| --- | --- |
+| `school-agent schedule discover [--course <canvas-id>] [--days <n>] [--json]` | Read Canvas enrollment and show unconfirmed calendar candidates. |
+| `school-agent schedule list [--days <n>] [--all]` | Show confirmed upcoming meetings; enrolled only by default. |
+| `school-agent schedule set-standing <canvas-id> <enrolled\|waitlisted\|old>` | Save an explicit course-standing override. |
+| `school-agent schedule clear-standing <canvas-id>` | Return to Canvas standing evidence. |
+| `school-agent schedule add-meeting <canvas-id> --days <mon,wed> --time <HH:mm> --from <YYYY-MM-DD> --until <YYYY-MM-DD>` | Confirm a recurring class meeting. |
+| `school-agent schedule rules` / `schedule remove-meeting <number>` | Review or remove a confirmed recurrence. |
+| `school-agent auto-prep configure [--enable\|--disable] [--timezone <iana-zone>] [--lead-hours <n>] [--window-hours <n>]` | Set the opt-in prep policy. |
+| `school-agent auto-prep run [--json]` | Preview due prep without generating it. |
+| `school-agent auto-prep run --execute` | Generate due briefs and record attempts locally. |
+| `school-agent auto-prep install [--apply]` | Preview or install the hourly OS job. |
+| `school-agent auto-prep uninstall [--apply]` | Preview or remove the owned OS job. |
+| `school-agent auto-prep status` | Show policy and OS job status. |
+
+Only confirmed recurring meetings for courses currently classified as enrolled can trigger automatic prep. Calendar entries are suggestions to review, not a schedule source. The default lead and late catch-up windows are both 24 hours; the job checks hourly. A course gets at most one automatic prep attempt per local week. It never replaces an existing weekly brief, and failed or interrupted attempts remain suppressed in the local ledger until deliberately reviewed. See [Class schedule and automatic prep](AUTO_PREP.md) for setup and recovery details.
+
 ## Evaluation and cost
 
 | Command | Purpose |
