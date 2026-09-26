@@ -2,6 +2,7 @@ import type { Command } from "commander"
 
 import type { RootOptions } from "../cli.js"
 import { loadConfig } from "../config/index.js"
+import { planIndexReconciliation } from "./index-reconcile-plan.js"
 import {
   executeCourseRootMigration,
   planCourseRootMigration,
@@ -11,6 +12,32 @@ import { executeVaultMigration, planVaultMigration } from "./vault-migration.js"
 
 export function registerVaultCommand(program: Command): void {
   const vault = program.command("vault").description("Manage the local Markdown vault")
+  const reconcile = vault
+    .command("reconcile-index")
+    .description("Classify missing indexed paths and suggest safe relinks (read-only)")
+    .option("--json", "print the complete local reconciliation plan as JSON")
+  reconcile.action(async () => {
+    const configuration = loadConfig(program.opts<RootOptions>().config)
+    const plan = await planIndexReconciliation({
+      vaultRoot: configuration.vault.path,
+      indexPath: configuration.index.path,
+    })
+    if (reconcile.opts<{ readonly json?: boolean }>().json === true) {
+      console.log(JSON.stringify(plan, null, 2))
+      return
+    }
+    const counts = new Map<string, number>()
+    for (const finding of plan.findings) {
+      counts.set(finding.status, (counts.get(finding.status) ?? 0) + 1)
+    }
+    console.log(`Index reconciliation: ${plan.findings.length} missing indexed path(s). Read-only.`)
+    for (const [status, count] of counts) console.log(`${status}: ${count}`)
+    console.log(`${plan.proposedRelinks} unique local relink candidate(s); no changes made.`)
+    console.log(
+      "Use --json to review individual candidates. Applying relinks is not supported yet.",
+    )
+  })
+
   const health = vault
     .command("health")
     .description("Audit vault and index consistency (read-only dry run)")

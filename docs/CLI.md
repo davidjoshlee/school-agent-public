@@ -42,6 +42,7 @@ Keep `CANVAS_TOKEN` and `AI_GATEWAY_API_KEY` in the adjacent `.env`, never in a 
 | `school-agent sync [--course <id-or-code>] [--full]` | Read allowlisted Canvas material into the vault. |
 | `school-agent ingest <file> --course <id>` | Add a local file to a vault course. |
 | `school-agent vault health [--json]` | Audit vault and SQLite index consistency without making changes. Returns a nonzero status when issues are found. |
+| `school-agent vault reconcile-index [--json]` | Classify missing indexed paths and show unique local relink candidates; read-only. |
 | `school-agent vault migrate` | Check or migrate vault layout where supported. |
 
 For example:
@@ -52,6 +53,7 @@ school-agent sync --course DEMO-101 --full
 school-agent ingest ./example-exhibit.pdf --course DEMO-101 --title "Example exhibit"
 school-agent vault health
 school-agent vault health --json
+school-agent vault reconcile-index
 ```
 
 `vault health` reports duplicate numbered Week directories, missing or out-of-root indexed paths, missing indexed files, and manifest-bearing course roots absent from the index. Its repair suggestions are advisory and are never applied by this command. `--json` prints the full audit and repair plan as JSON.
