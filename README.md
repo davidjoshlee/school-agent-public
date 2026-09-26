@@ -15,6 +15,15 @@ Canvas access is read-only. School Agent does not write to Canvas, post replies,
 
 Supported: macOS and Linux with Node.js 22 or newer. Windows has not been verified.
 
+After the first tagged release, friends can use the `.tgz` install asset on the [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases) page. GitHub also provides a source archive for each release. The install asset is built for its matching tag and can be installed without cloning the repository:
+
+```bash
+npm install --global https://github.com/davidjoshlee/school-agent-public/releases/download/v0.1.0/school-agent-0.1.0.tgz
+school-agent --help
+```
+
+This example will work once `v0.1.0` has been tagged and released. Replace the tag and filename with those shown on the release page for later releases. To install from source or help develop the project, use the commands below.
+
 ```bash
 git clone https://github.com/davidjoshlee/school-agent-public.git
 cd school-agent-public
@@ -26,7 +35,7 @@ npm link
 school-agent setup --canvas-url https://canvas.example.edu
 ```
 
-Install from source using the commands above; an npm registry release is not yet available.
+No npm registry publication is used; installs come from GitHub Releases or a source checkout.
 
 `setup` creates a new configuration only when neither `school.config.json` nor its adjacent `.env` already exists. Its conservative defaults are a vault at `~/school-vault`, no vault Git repository, an empty course allowlist, restricted-file handling set to `exclude`, a local index at `~/.local/share/school-agent/index.db`, and a $15 monthly model-spend cap. It will not overwrite existing setup files.
 
@@ -69,5 +78,7 @@ npm test
 ```
 
 Contributions are welcome—please read [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). The code is under the [MIT License](LICENSE); it does not grant rights to course materials or other user content.
+
+Maintainers of pinned installations can use the [runtime upgrade and rollback guide](docs/runtime-upgrades.md) and [private parity check](docs/PARITY.md) before switching versions. Run `school-agent vault health` to get a read-only vault/index audit and advisory repair plan.
 
 Coding agents can use the optional [School Agent plugin](docs/PLUGIN.md) for product-specific guidance. It does not connect to Canvas or expose a user's vault.

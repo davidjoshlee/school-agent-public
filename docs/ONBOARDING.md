@@ -12,6 +12,15 @@ Windows has not been verified. You do not need a custom shell function, zsh conf
 
 ## Install and initialize
 
+After a tagged release is available, open [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases), copy its `.tgz` asset URL, then run:
+
+```bash
+npm install --global https://github.com/davidjoshlee/school-agent-public/releases/download/v0.1.0/school-agent-0.1.0.tgz
+school-agent --help
+```
+
+The `v0.1.0` example will work after that release is published. Use the exact tag and `.tgz` filename listed for the version you choose. If there is no release yet, or if you want to run from source, use this path:
+
 ```bash
 git clone https://github.com/davidjoshlee/school-agent-public.git
 cd school-agent-public
@@ -45,6 +54,8 @@ AI_GATEWAY_API_KEY=replace_with_your_gateway_key
 
 The installed launcher loads this file automatically. Canvas tokens are typically created from Canvas account settings; follow your institution’s instructions and choose an appropriate expiration.
 
+If `setup` says a setup file already exists, it left both files untouched. Back up and review your existing `school.config.json` and `.env`, then continue with those files; do not rerun setup expecting it to merge settings. If setup fails on the Canvas URL, provide the institution's HTTPS Canvas base URL only (no username, password, query, or fragment).
+
 ## Verify, choose, and sync
 
 ```bash
@@ -71,4 +82,4 @@ AI-policy values are informational metadata, not an enforcement mechanism. Schoo
 
 The $15 cap is a preflight check before a call. It cannot guarantee that an in-progress call will not carry usage beyond the cap. Local estimates are based on recorded token usage; reconcile costs when available and review `school-agent cost` regularly.
 
-If `doctor` or `auth verify` fails, first check the Canvas URL, token, network access, and that `.env` sits next to `school.config.json`. Never paste credentials or real course material into an issue.
+If `doctor` reports an invalid configuration, run `school-agent config validate` and fix the named field in `school.config.json`. A missing Canvas token means `CANVAS_TOKEN` is blank or absent in the `.env` beside the selected config; a missing AI key is expected for sync-only use but blocks generation. If `auth verify` fails, check the Canvas base URL, token expiration and permissions, network access, and that the token variable name matches `canvas.tokenEnv` in the config. Never paste credentials, real course material, or private Canvas URLs into an issue.

@@ -173,6 +173,8 @@ describe("generatePrepBrief", () => {
       // Then: every required section is auto-delivered and its reading resolves in the course vault.
       const output = parseVaultDocument(await readFile(result.path, "utf8"), result.path)
       expect(output.frontmatter.status).toBe("auto-final")
+      expect(result.path).toContain("Week 01 - Sep 08/Prep/week 2026-09-08.md")
+      expect(output.frontmatter.dates.period).toBe("week-2026-09-08")
       expect(output.content).toContain("## Agenda")
       expect(output.content).toContain("## Readings")
       expect(output.content).toContain("## Concepts")
@@ -690,6 +692,33 @@ describe("generatePrepBrief", () => {
         expect(output.content).toContain("## Answers")
         expect(output.content).toContain("### 1. What price maximizes contribution margin?")
         expect(output.content).toContain("Match selectively only on price-sensitive buyers")
+      } finally {
+        index.close()
+        await rm(root, { recursive: true, force: true })
+      }
+    })
+
+    it("delivers an explicit unable-to-answer flag for a question the sources do not resolve", async () => {
+      const root = await fixtureVaultWithCue()
+      const index = createSchoolIndex({ path: ":memory:" })
+      try {
+        const result = await generatePrepBrief({
+          vaultRoot: root,
+          config: config(),
+          course,
+          period: { kind: "week", value: "2026-09-08" },
+          index,
+          runner: runner(
+            join(root, ".agent-runs"),
+            briefWithAnswers(
+              "The supplied materials do not provide enough evidence to determine whether the rival's cost structure supports a price cut.",
+            ),
+          ),
+          triage: { summarize: async () => "unused" },
+        })
+
+        const output = parseVaultDocument(await readFile(result.path, "utf8"), result.path)
+        expect(output.content).toContain("enough evidence to determine")
       } finally {
         index.close()
         await rm(root, { recursive: true, force: true })

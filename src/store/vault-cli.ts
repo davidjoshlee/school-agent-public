@@ -6,10 +6,40 @@ import {
   executeCourseRootMigration,
   planCourseRootMigration,
 } from "./vault-course-root-migration.js"
+import { planVaultHealth } from "./vault-health.js"
 import { executeVaultMigration, planVaultMigration } from "./vault-migration.js"
 
 export function registerVaultCommand(program: Command): void {
   const vault = program.command("vault").description("Manage the local Markdown vault")
+  const health = vault
+    .command("health")
+    .description("Audit vault and index consistency (read-only dry run)")
+    .option("--json", "print the complete audit and repair plan as JSON")
+  health.action(async () => {
+    const configuration = loadConfig(program.opts<RootOptions>().config)
+    const plan = await planVaultHealth({
+      root: configuration.vault.path,
+      indexPath: configuration.index.path,
+    })
+    if (health.opts<{ readonly json?: boolean }>().json === true) {
+      console.log(JSON.stringify(plan, null, 2))
+    } else {
+      console.log(
+        `Vault health: ${plan.issues.length} issue(s). Read-only dry run; no changes made.`,
+      )
+      for (const issue of plan.issues) {
+        console.log(`${issue.kind.toUpperCase()} ${issue.path}: ${issue.detail}`)
+      }
+      if (plan.issues.length === 0) console.log("No vault health issues found.")
+      if (plan.repairPlan.length > 0) {
+        console.log("Suggested review actions (not applied):")
+        for (const action of plan.repairPlan) console.log(`- ${action.kind}: ${action.detail}`)
+      }
+    }
+    if (plan.issues.length > 0)
+      throw new Error(`Vault health found ${plan.issues.length} issue(s).`)
+  })
+
   const migrate = vault
     .command("migrate")
     .description("Plan a v1 -> v2 vault migration (dry-run by default)")
