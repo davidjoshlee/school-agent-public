@@ -14,6 +14,7 @@ Canvas GETs (allowlisted courses)
 - `src/canvas/`: authentication, course discovery, allowlist onboarding, GET-only HTTP, sync and ingest.
 - `src/store/`: vault path vocabulary and ownership-aware writer, frontmatter, manifests, SQLite index.
 - `src/engines/`: retrieval and source selection, prep, drafting, evaluation, and cost flows.
+- `src/schedule/`: owned hourly OS job planning and status; `src/engines/auto-prep-*` plans and records scheduled prep.
 - `src/agents/`: model runner, run records and tools.
 - `src/config/` and `config/models.default.json`: setup, validation, default model mappings; user config may override.
 - `src/cli.ts`: CLI registration and global options. Installed binary is `school-agent` (also `school`).
@@ -27,6 +28,7 @@ For an installed version, `school-agent --help` is the command authority. In a s
 | Install, configure, or select courses | `setup-and-onboard` |
 | Refresh material or diagnose duplicate/missing content | `sync-and-diagnose` |
 | Complete prep for a named week/session | `prepare-class` |
+| Classify current courses, confirm class meetings, or schedule prep | `schedule-auto-prep` |
 | Draft, revise, or approve local assignment work | `draft-and-review` |
 | Check cited sources, selected context, or output provenance | `inspect-provenance` |
 | Understand model mappings, usage, or spend | `manage-models-and-cost` |

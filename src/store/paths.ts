@@ -16,6 +16,7 @@ export const vaultLayout = {
   auth: "auth.json",
   alert: "ALERT.md",
   contextLog: "model-context-log.jsonl",
+  autoPrepLedger: "auto-prep-ledger",
   layoutMetadata: "layout.json",
   dogfood: "dogfood",
   coursePlaybook: "course-playbook.md",
@@ -86,6 +87,7 @@ export const layoutSegments = [
   vaultLayout.auth,
   vaultLayout.alert,
   vaultLayout.contextLog,
+  vaultLayout.autoPrepLedger,
   vaultLayout.layoutMetadata,
   vaultLayout.dogfood,
   vaultLayout.coursePlaybook,
@@ -128,6 +130,7 @@ export type VaultPaths = {
     readonly auth: string
     readonly alert: string
     readonly contextLog: string
+    readonly autoPrepLedger: string
   }
 }
 
@@ -253,6 +256,7 @@ export function vaultPaths(root: string): VaultPaths {
       auth: join(metadata, vaultLayout.auth),
       alert: join(metadata, vaultLayout.alert),
       contextLog: join(metadata, vaultLayout.contextLog),
+      autoPrepLedger: join(metadata, vaultLayout.autoPrepLedger),
     },
   }
 }

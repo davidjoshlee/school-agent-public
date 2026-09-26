@@ -6,6 +6,7 @@ School Agent is a local-first command-line tool for reading Canvas course materi
 
 - Reads allowlisted Canvas courses into a local Markdown vault.
 - Creates prep briefs and draft artifacts from material available in that vault.
+- Can run opted-in class prep from user-confirmed recurring meetings for currently enrolled courses.
 - Keeps the vault and local index on your computer.
 - Tracks estimated model usage and can reconcile eligible calls with AI Gateway’s reported cost.
 
@@ -60,6 +61,8 @@ school-agent prep <course-id> --week <YYYY-MM-DD>
 `doctor` reports a missing Canvas token as an error. A missing AI Gateway key is a warning, so you can still set up and sync. `onboard --all-active` persists the active-course allowlist. Review `courses.allowlist` in `school.config.json` and remove any course you do not want synced before running `sync`.
 
 For the fuller walkthrough, including key creation and troubleshooting, see [Onboarding](docs/ONBOARDING.md).
+
+To prepare before class automatically, inspect enrollment and unconfirmed Canvas calendar candidates with `school-agent schedule discover`, confirm a recurring meeting with `schedule add-meeting`, then configure your time zone and lead time. Preview with `school-agent auto-prep run`; the hourly OS job is installed only by `school-agent auto-prep install --apply`. See [Class schedule and automatic prep](docs/AUTO_PREP.md) for the complete workflow and its local attempt ledger.
 
 ## Privacy, course material, and cost
 
