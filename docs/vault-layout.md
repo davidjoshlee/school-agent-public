@@ -25,6 +25,24 @@ a retry conflict (including when `_index.md` was not reached). Inspect the plan
 and vault state and resolve conflicts manually; automatic safe resume is not
 guaranteed.
 
+Early v2 vaults can already have a v2 layout marker but still use course-code
+folder names. Before switching an existing vault to a build that uses
+`course-<CanvasID>` roots, back up both the vault and its SQLite index, stop
+other School Agent writers, then run:
+
+```sh
+school vault migrate-roots
+school vault migrate-roots --apply
+```
+
+The dry run verifies each `_index.md` Canvas ID against its course URL and
+refuses duplicate identities or existing destinations. Apply renames complete
+course folders and rebases absolute paths in the local index. Each folder move
+is atomic on the same filesystem; if a later step fails, the tool attempts to
+roll back completed moves. Keep the backup until a sync and prep check pass.
+Do not run the old course-code-root writer against the migrated vault; rollback
+requires restoring the matching vault and index backup together.
+
 ## Root metadata
 
 `_meta/` stores operational records, not course material. It contains the
