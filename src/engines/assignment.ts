@@ -17,6 +17,7 @@ import {
   xlsxSiblingPath,
 } from "../store/paths.js"
 import { parseVaultDocument, VaultWriter, vaultSources, vaultStatuses } from "../store/vault.js"
+import { assertCourseRootLayoutReady } from "../store/vault-course-root-migration.js"
 import { buildXlsx } from "../store/xlsx.js"
 import { sheetsFromDraft } from "../store/xlsx-extract.js"
 import { readDirectory, readOptional } from "../util/fs.js"
@@ -303,6 +304,7 @@ export async function reviseAssignment(
 export async function discussAssignment(
   input: DiscussAssignmentInput,
 ): Promise<AssignmentDiscussionResult> {
+  await assertCourseRootLayoutReady(input.vaultRoot)
   const course = await resolveCoursePolicy(input.vaultRoot, input.config, input.course)
   const context = await assignmentContext({ ...input, course })
   const result = await input.runner.run(

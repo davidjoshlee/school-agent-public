@@ -4,7 +4,7 @@ import { join, relative } from "node:path"
 import type { AgentRunner } from "../agents/runner.js"
 import type { SchoolConfig } from "../config/index.js"
 import { createSchoolIndex } from "../store/db.js"
-import { coursePaths, slugify } from "../store/paths.js"
+import { coursePaths, slugify, vaultLayout } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault.js"
 import {
   draftAssignment,
@@ -81,6 +81,11 @@ export async function runSimulation(input: SimulationInput): Promise<SimulationR
     await rm(weekVaultRoot, { recursive: true, force: true })
     await mkdir(weekVaultRoot, { recursive: true })
     await stageSnapshot({ ...snapshot, course: weekCourse }, documents, weekVaultRoot)
+    await mkdir(join(weekVaultRoot, vaultLayout.metadata), { recursive: true })
+    await writeFile(
+      join(weekVaultRoot, vaultLayout.metadata, vaultLayout.layoutMetadata),
+      `${JSON.stringify({ layout_version: vaultLayout.version, course_root_version: vaultLayout.courseRootVersion }, null, 2)}\n`,
+    )
     const index = createSchoolIndex({ path: ":memory:" })
     try {
       const configuration: SchoolConfig = {

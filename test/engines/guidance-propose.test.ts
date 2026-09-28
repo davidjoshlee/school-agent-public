@@ -9,7 +9,7 @@ import type { SchoolConfig } from "../../src/config/index.js"
 import { parseStructure } from "../../src/engines/guidance.js"
 import { proposeGuidance } from "../../src/engines/guidance-propose.js"
 import { createSchoolIndex } from "../../src/store/db.js"
-import { coursePaths } from "../../src/store/paths.js"
+import { coursePaths, vaultLayout } from "../../src/store/paths.js"
 import {
   createVaultFrontmatter,
   parseVaultDocument,
@@ -66,8 +66,20 @@ async function put(path: string, content: string): Promise<void> {
   await writeFile(path, document(content), "utf8")
 }
 
+async function markLayout(root: string): Promise<void> {
+  await mkdir(join(root, "_meta"), { recursive: true })
+  await writeFile(
+    join(root, "_meta", "layout.json"),
+    JSON.stringify({
+      layout_version: vaultLayout.version,
+      course_root_version: vaultLayout.courseRootVersion,
+    }),
+  )
+}
+
 async function fixtureVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-guidance-propose-")
+  await markLayout(root)
   const paths = coursePaths(root, course.code, course.canvasId)
   await put(
     paths.syllabus,
@@ -86,6 +98,7 @@ async function fixtureVault(): Promise<string> {
 
 async function fixtureVaultWithMajorDeliverable(): Promise<string> {
   const root = await temporaryDirectory("school-agent-guidance-propose-deliverable-")
+  await markLayout(root)
   const paths = coursePaths(root, course.code, course.canvasId)
   await put(
     paths.syllabus,

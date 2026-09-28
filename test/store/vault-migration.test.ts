@@ -192,6 +192,9 @@ describe("vault v1 -> v2 migration", () => {
     expect(await readFile(join(root, "_meta", "layout.json"), "utf8")).toContain(
       '"migrated_from": 1',
     )
+    expect(await readFile(join(root, "_meta", "layout.json"), "utf8")).not.toContain(
+      '"course_root_version"',
+    )
 
     const rerun = await migrateVault({ root, apply: true })
     expect(rerun.applied).toBe(false)

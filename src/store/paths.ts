@@ -9,6 +9,7 @@ import { join, parse } from "node:path"
  */
 export const vaultLayout = {
   version: 2,
+  courseRootVersion: 2,
 
   // Operational vault paths. `_meta` is intentionally not course material.
   metadata: "_meta",
@@ -258,9 +259,7 @@ export function vaultPaths(root: string): VaultPaths {
 }
 
 /**
- * Return the v2 human-facing course tree. The Canvas course ID is part of
- * the root identity so cross-listed or duplicated course codes cannot share
- * one vault directory. This function only computes
+ * Return the v2 human-facing course tree. This function only computes
  * strings; it never creates directories. Writers create a period or an
  * assignment subtree only when they have an artifact to place in it.
  */
@@ -269,7 +268,7 @@ export function coursePaths(
   courseCode: string,
   courseId: string | number,
 ): CoursePaths {
-  const course = join(root, `course-${slugify(String(courseId), "unknown")}`)
+  const course = join(root, courseDirectoryName(courseCode, courseId))
   const metadata = join(course, vaultLayout.metadata)
   const legacy = legacyCoursePaths(root, courseCode, courseId)
   const resources = join(course, vaultLayout.resources)
@@ -299,6 +298,20 @@ export function coursePaths(
     playbook: join(metadata, vaultLayout.coursePlaybook),
     legacy,
   }
+}
+
+/** Human-facing course identifier; Canvas IDs remain metadata, not folder names. */
+export function courseDirectoryName(courseCode: string, courseId: string | number): string {
+  const named = courseCode.match(
+    /^(?:(?:F|W|Sp|Su)\d{2}|\d{2}(?:F|W|Sp|Su))[-\s]+([A-Za-z]{2,12})[-\s]+([0-9]{2,4}[A-Za-z]?)(?=$|[-\s/])/i,
+  )
+  if (named !== null) return `${named[1]}${named[2]}`.toUpperCase()
+  if (/^[A-Z]{2,12}[0-9]{2,4}[A-Z]?$/.test(courseCode)) return courseCode
+  const termless = courseCode.match(
+    /^(?:\d{2}(?:Su|Sp|F|W)|(?:F|W|Sp|Su)\d{2})[-\s]+([A-Za-z]{2,12})$/i,
+  )
+  if (termless?.[1] !== undefined) return termless[1].toUpperCase()
+  return slugify(courseCode, `untitled-${courseId}`)
 }
 
 /** Compute the old flat tree without changing the v2 default. */

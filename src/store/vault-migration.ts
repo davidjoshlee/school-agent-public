@@ -13,7 +13,7 @@ import {
 } from "node:fs/promises"
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path"
 
-import { coursePaths, vaultLayout } from "./paths.js"
+import { vaultLayout } from "./paths.js"
 import { type ParsedVaultDocument, parseVaultDocument } from "./vault-document.js"
 
 /** The legacy layout emitted by the original Canvas sync writer. */
@@ -168,6 +168,17 @@ export async function planVaultMigration(
   for (const courseRoot of courseRoots) {
     courses.push(await planCourseMigration(root, courseRoot))
   }
+  const rootsByIdentity = new Map<string, string[]>()
+  for (const courseRoot of courseRoots) {
+    const identity = await readCourseIdentity(join(courseRoot, vaultLayout.index))
+    if (identity.id === null) continue
+    const group = rootsByIdentity.get(identity.id) ?? []
+    group.push(courseRoot)
+    rootsByIdentity.set(identity.id, group)
+  }
+  const duplicateIdentityRoots = new Set(
+    [...rootsByIdentity.values()].filter((group) => group.length > 1).flat(),
+  )
   const rootsByTarget = new Map<string, MigrationCoursePlan[]>()
   for (const course of courses) {
     const group = rootsByTarget.get(course.destinationCourseRoot) ?? []
@@ -181,8 +192,12 @@ export async function planVaultMigration(
   )
   const safeCourses = await Promise.all(
     courses.map(async (course) => {
-      if (!duplicateTargetRoots.has(course.destinationCourseRoot)) return course
-      const reason = `Multiple legacy course roots target ${relative(root, course.destinationCourseRoot)}; course identity cannot be merged safely.`
+      if (
+        !duplicateTargetRoots.has(course.destinationCourseRoot) &&
+        !duplicateIdentityRoots.has(course.courseRoot)
+      )
+        return course
+      const reason = `Multiple legacy course roots target one course identity or ${relative(root, course.destinationCourseRoot)}; course identity cannot be merged safely.`
       return {
         ...course,
         actions: [
@@ -363,7 +378,7 @@ async function findCourseIdentity(root: string, courseRoot: string): Promise<Cou
   const destinationRoot =
     courseId === null
       ? join(root, `course-unresolved-${basename(courseRoot)}`)
-      : coursePaths(root, basename(courseRoot), courseId).root
+      : join(root, `course-${courseId}`)
 
   if (courseId === null) {
     const error = `Cannot confirm Canvas course identity for ${relative(root, courseRoot) || "."}: ${sourceIdentity.error}`

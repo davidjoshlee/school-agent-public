@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto"
 import { coursePaths, vaultDocumentKinds } from "../store/paths.js"
 import type { VaultWriter } from "../store/vault.js"
+import { assertCourseRootLayoutReady } from "../store/vault-course-root-migration.js"
+import { displayCourseCode } from "./course-identity.js"
 import {
   type Announcement,
   type Assignment,
@@ -67,8 +69,9 @@ type CourseSyncInput = {
 }
 
 export async function syncCourse(input: CourseSyncInput): Promise<SyncCourseReport> {
+  await assertCourseRootLayoutReady(input.options.vaultPath)
   const courseId = String(input.course.id)
-  const courseCode = input.course.course_code ?? `course-${courseId}`
+  const courseCode = displayCourseCode(input.course)
   const course = vaultCourse(input.options, input.course, courseCode)
   const changes: SyncChange[] = []
   const gaps: FileAuditGap[] = []

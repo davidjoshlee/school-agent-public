@@ -4,6 +4,8 @@ import { persistPilotCourse, type SchoolConfig } from "../config/index.js"
 import type { SchoolIndex } from "../store/db.js"
 import { coursePaths, vaultDocumentKinds } from "../store/paths.js"
 import { type VaultWriteResult, VaultWriter, vaultSources, vaultStatuses } from "../store/vault.js"
+import { assertCourseRootLayoutReady } from "../store/vault-course-root-migration.js"
+import { displayCourseCode } from "./course-identity.js"
 import { type Course, dedupeCoursesById, listCourses } from "./endpoints.js"
 import type { CanvasHttpClient } from "./http.js"
 import { probeUnresolvedCourse } from "./onboard-eligibility.js"
@@ -67,6 +69,7 @@ export async function listDiscoveredCourses(
 }
 
 export async function onboardPilot(input: PilotOnboardingInput): Promise<PilotOnboardingReport> {
+  await assertCourseRootLayoutReady(input.configuration.vault.path)
   const course = await resolveEligiblePilotCourse(input.client, input.pilotCourseId)
 
   persistPilotCourse(input.configurationPath, course.id)
@@ -101,7 +104,7 @@ function discovered(course: Course, enrollment: Enrollment): DiscoveredCourse {
   const id = String(course.id)
   return {
     id,
-    code: course.course_code ?? `course-${id}`,
+    code: displayCourseCode(course),
     name: course.name ?? `Course ${id}`,
     enrollment,
   }

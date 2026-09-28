@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import type { Command } from "commander"
 
 import type { RootOptions } from "../cli.js"
@@ -96,11 +97,11 @@ export function registerVaultCommand(program: Command): void {
 
   const migrateRoots = vault
     .command("migrate-roots")
-    .description("Plan legacy v2 course-code root moves to stable Canvas-ID roots")
+    .description("Plan legacy v2 course roots to human-readable course-name roots")
     .option("--apply", "apply the planned moves; without this flag nothing is changed")
   migrateRoots.action(async () => {
     const configuration = loadConfig(program.opts<RootOptions>().config)
-    const plan = await planCourseRootMigration(configuration.vault.path)
+    const plan = await planCourseRootMigration(configuration.vault.path, configuration.index.path)
     console.log(
       `Course-root migration: ${plan.moves.length} move(s), ${plan.conflicts.length} conflict(s).`,
     )
@@ -110,6 +111,11 @@ export function registerVaultCommand(program: Command): void {
     for (const conflict of plan.conflicts) console.error(`CONFLICT ${conflict}`)
     if (migrateRoots.opts<{ readonly apply?: boolean }>().apply !== true) {
       console.log("Dry run only; pass --apply to move course roots and rebase the local index.")
+      return
+    }
+    if (!plan.ready) throw new Error("Course-root migration has conflicts; nothing moved.")
+    if (!existsSync(configuration.index.path)) {
+      console.log("No local index or course roots exist; there is nothing to migrate.")
       return
     }
     const moved = await executeCourseRootMigration(plan, configuration.index.path)
