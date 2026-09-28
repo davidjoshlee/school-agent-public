@@ -25,6 +25,15 @@ a retry conflict (including when `_index.md` was not reached). Inspect the plan
 and vault state and resolve conflicts manually; automatic safe resume is not
 guaranteed.
 
+For a v1 vault, this first stage places content under distinct
+`course-<CanvasID>` roots. Run `school vault migrate-roots` next to rename
+those complete roots to course names. This two-stage path avoids collisions
+between legacy `assignments/` and new `Assignments/` on case-insensitive
+filesystems. Do not sync or generate artifacts between the stages.
+If the local index still points to pre-migration paths, the second dry run
+will refuse to proceed; restore the matching backup or reconcile the index
+before applying a root rename. Never force a partial migration.
+
 Earlier v2 vaults can already have a v2 layout marker but still use
 `course-<CanvasID>` or legacy course-code folder names. Before switching
 an existing vault to a build that uses normalized course names, back up both

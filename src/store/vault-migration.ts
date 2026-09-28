@@ -13,7 +13,7 @@ import {
 } from "node:fs/promises"
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path"
 
-import { coursePaths, vaultLayout } from "./paths.js"
+import { vaultLayout } from "./paths.js"
 import { type ParsedVaultDocument, parseVaultDocument } from "./vault-document.js"
 
 /** The legacy layout emitted by the original Canvas sync writer. */
@@ -378,7 +378,7 @@ async function findCourseIdentity(root: string, courseRoot: string): Promise<Cou
   const destinationRoot =
     courseId === null
       ? join(root, `course-unresolved-${basename(courseRoot)}`)
-      : coursePaths(root, basename(courseRoot), courseId).root
+      : join(root, `course-${courseId}`)
 
   if (courseId === null) {
     const error = `Cannot confirm Canvas course identity for ${relative(root, courseRoot) || "."}: ${sourceIdentity.error}`
@@ -583,7 +583,6 @@ async function writeLayoutMetadata(
     {
       ...previous,
       layout_version: targetVersion,
-      course_root_version: vaultLayout.courseRootVersion,
       migrated_from: sourceVersion,
       migrated_at: now().toISOString(),
     },

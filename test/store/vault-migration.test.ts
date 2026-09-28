@@ -43,16 +43,13 @@ function document(
   )
 }
 
-async function writeLegacyFixture(
-  root: string,
-  sourceName = course,
-): Promise<{
+async function writeLegacyFixture(root: string): Promise<{
   readonly courseRoot: string
   readonly destinationRoot: string
   readonly files: Readonly<Record<string, string>>
 }> {
-  const courseRoot = join(root, sourceName)
-  const destinationRoot = join(root, sourceName === course ? course : "DEMO101")
+  const courseRoot = join(root, course)
+  const destinationRoot = join(root, "course-101")
   const files = {
     home: join(courseRoot, "_index.md"),
     syllabus: join(courseRoot, "00-syllabus.md"),
@@ -122,7 +119,7 @@ describe("vault v1 -> v2 migration", () => {
     const plan = await planVaultMigration({ root })
 
     expect(plan.moves.map((action) => action.destinationRelative)).toContain(
-      "demo-101/Milestone 01 - Sep 21/00 Overview.md",
+      "course-101/Milestone 01 - Sep 21/00 Overview.md",
     )
   })
 
@@ -138,13 +135,14 @@ describe("vault v1 -> v2 migration", () => {
     expect(plan.ready).toBe(true)
     expect(plan.moves.map((action) => action.destinationRelative).sort()).toEqual(
       [
-        "demo-101/Assignments/2026-10-02 - Synthetic Case Analysis/00 Prompt.md",
-        "demo-101/Assignments/2026-10-02 - Synthetic Case Analysis/Drafts/response.md",
-        "demo-101/Resources/Syllabus.md",
-        "demo-101/Week 01 - Sep 21/Materials/case-notes.md",
-        "demo-101/Week 01 - Sep 21/Materials/reading.md",
-        "demo-101/Week 01 - Sep 21/00 Overview.md",
-        "demo-101/Week 01 - Sep 21/Prep/week-2026-09-21.md",
+        "course-101/_index.md",
+        "course-101/Assignments/2026-10-02 - Synthetic Case Analysis/00 Prompt.md",
+        "course-101/Assignments/2026-10-02 - Synthetic Case Analysis/Drafts/response.md",
+        "course-101/Resources/Syllabus.md",
+        "course-101/Week 01 - Sep 21/Materials/case-notes.md",
+        "course-101/Week 01 - Sep 21/Materials/reading.md",
+        "course-101/Week 01 - Sep 21/00 Overview.md",
+        "course-101/Week 01 - Sep 21/Prep/week-2026-09-21.md",
       ].sort(),
     )
     expect(await readFile(fixture.files.assignment)).toEqual(before)
@@ -165,7 +163,7 @@ describe("vault v1 -> v2 migration", () => {
     })
 
     expect(result.applied).toBe(true)
-    expect(result.moved).toHaveLength(7)
+    expect(result.moved).toHaveLength(8)
     const assignment = await readFile(
       join(
         fixture.destinationRoot,
@@ -179,12 +177,9 @@ describe("vault v1 -> v2 migration", () => {
     expect(await readFile(join(fixture.destinationRoot, "_index.md"), "utf8")).toContain(
       "canvas_id: index",
     )
-    // In-place migration preserves the course index and leaves empty legacy
-    // directories; pruning them is not part of the migration plan.
+    // Migration moves every file but intentionally leaves empty legacy
+    // directories in place; pruning them is not part of the migration plan.
     expect((await readdir(fixture.courseRoot)).sort()).toEqual([
-      "Resources",
-      "Week 01 - Sep 21",
-      "_index.md",
       "assignments",
       "drafts",
       "files",
@@ -196,6 +191,9 @@ describe("vault v1 -> v2 migration", () => {
     )
     expect(await readFile(join(root, "_meta", "layout.json"), "utf8")).toContain(
       '"migrated_from": 1',
+    )
+    expect(await readFile(join(root, "_meta", "layout.json"), "utf8")).not.toContain(
+      '"course_root_version"',
     )
 
     const rerun = await migrateVault({ root, apply: true })
@@ -222,7 +220,7 @@ describe("vault v1 -> v2 migration", () => {
     expect(plan.ready).toBe(false)
     expect(
       plan.conflicts.some(
-        (action) => action.destinationRelative === "demo-101/Resources/Syllabus.md",
+        (action) => action.destinationRelative === "course-101/Resources/Syllabus.md",
       ),
     ).toBe(true)
     await expect(executeVaultMigration(plan)).rejects.toThrow("destination conflict")
@@ -246,10 +244,10 @@ describe("vault v1 -> v2 migration", () => {
     const plan = await planVaultMigration({ root })
     const destinations = plan.moves
       .map((action) => action.destinationRelative)
-      .filter((path) => path.startsWith("demo-101/Other/note"))
+      .filter((path) => path.startsWith("course-101/Other/note"))
       .sort()
 
-    expect(destinations).toEqual(["demo-101/Other/note (2).md", "demo-101/Other/note.md"])
+    expect(destinations).toEqual(["course-101/Other/note (2).md", "course-101/Other/note.md"])
     expect(destinations.join("\n")).not.toContain("canvas-secret")
   })
 
@@ -274,7 +272,7 @@ describe("vault v1 -> v2 migration", () => {
 
   it("blocks a destination directory whose index identifies a different course", async () => {
     const root = await temporaryDirectory("school-agent-vault-migration-root-conflict-")
-    const fixture = await writeLegacyFixture(root, "F26-DEMO-101-01")
+    const fixture = await writeLegacyFixture(root)
     await mkdir(fixture.destinationRoot, { recursive: true })
     const conflictingIndex = (await readFile(fixture.files.home, "utf8"))
       .replace("canvas_id: index", "canvas_id: '202'")
@@ -284,13 +282,13 @@ describe("vault v1 -> v2 migration", () => {
     const plan = await planVaultMigration({ root })
 
     expect(plan.ready).toBe(false)
-    expect(plan.conflicts.some((action) => action.reason.includes("course identity"))).toBe(true)
+    expect(plan.conflicts[0]?.reason).toContain("does not confirm Canvas course 101")
     expect(await readFile(fixture.files.assignment, "utf8")).toContain("Synthetic Case")
   })
 
   it("preflights conflicts for hidden files before moving any planned content", async () => {
     const root = await temporaryDirectory("school-agent-vault-migration-hidden-conflict-")
-    const fixture = await writeLegacyFixture(root, "F26-DEMO-101-01")
+    const fixture = await writeLegacyFixture(root)
     const hiddenSource = join(fixture.courseRoot, ".local-state")
     const hiddenDestination = join(fixture.destinationRoot, ".local-state")
     await writeFile(hiddenSource, "legacy hidden state\n")
@@ -302,7 +300,7 @@ describe("vault v1 -> v2 migration", () => {
 
     expect(plan.ready).toBe(false)
     expect(
-      plan.conflicts.some((action) => action.destinationRelative === "DEMO101/.local-state"),
+      plan.conflicts.some((action) => action.destinationRelative === "course-101/.local-state"),
     ).toBe(true)
     await expect(executeVaultMigration(plan)).rejects.toThrow("destination conflict")
     expect(await readFile(fixture.files.assignment, "utf8")).toContain("Synthetic Case")
@@ -312,7 +310,7 @@ describe("vault v1 -> v2 migration", () => {
 
   it("keeps the v1 marker and requires inspection after a mid-migration failure", async () => {
     const root = await temporaryDirectory("school-agent-vault-migration-partial-")
-    const fixture = await writeLegacyFixture(root, "F26-DEMO-101-01")
+    const fixture = await writeLegacyFixture(root)
     const plan = await planVaultMigration({ root })
     const firstMove = plan.moves[0]
     const secondMove = plan.moves[1]
