@@ -30,7 +30,7 @@ This is a skills-only plugin. It contains instructions, not the School Agent CLI
 
 The plugin cannot verify a user's CLI version, configuration, Canvas access, vault, or course rules. Treat its guidance as a starting point and check the installed CLI's `--help` and current documentation for version-specific behavior. The plugin does not enforce academic policy or determine whether AI use is allowed in a course.
 
-The v2 vault uses stable `course-<CanvasID>/` roots and organizes material under each course by week or milestone. Prep generated from a selected period is stored in that period's `Prep/` folder; verify the path because fallback retrieval may not resolve to a period folder. See [the vault layout](vault-layout.md) for the tree and ownership rules. When CLI commands or behavior change, update the relevant skill and keep its guidance aligned with `docs/CLI.md` and the implementation.
+The v2 vault uses human-readable course-code roots (for example, `GSBGEN515/`) and organizes material under each course by week or milestone. Existing ID-named roots require a reviewed `school vault migrate-roots` dry run before applying changes. Prep generated from a selected period is stored in that period's `Prep/` folder; verify the path because fallback retrieval may not resolve to a period folder. See [the vault layout](vault-layout.md) for the tree and ownership rules. When CLI commands or behavior change, update the relevant skill and keep its guidance aligned with `docs/CLI.md` and the implementation.
 
 ## Quality checks
 

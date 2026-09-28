@@ -25,23 +25,24 @@ a retry conflict (including when `_index.md` was not reached). Inspect the plan
 and vault state and resolve conflicts manually; automatic safe resume is not
 guaranteed.
 
-Early v2 vaults can already have a v2 layout marker but still use course-code
-folder names. Before switching an existing vault to a build that uses
-`course-<CanvasID>` roots, back up both the vault and its SQLite index, stop
-other School Agent writers, then run:
+Earlier v2 vaults can already have a v2 layout marker but still use
+`course-<CanvasID>` or legacy course-code folder names. Before switching
+an existing vault to a build that uses normalized course names, back up both
+the vault and its SQLite index, stop other School Agent writers, then run:
 
 ```sh
 school vault migrate-roots
 school vault migrate-roots --apply
 ```
 
-The dry run verifies each `_index.md` Canvas ID against its course URL and
-refuses duplicate identities or existing destinations. Apply renames complete
-course folders and rebases absolute paths in the local index. Each folder move
-is atomic on the same filesystem; if a later step fails, the tool attempts to
-roll back completed moves. Keep the backup until a sync and prep check pass.
-Do not run the old course-code-root writer against the migrated vault; rollback
-requires restoring the matching vault and index backup together.
+The dry run checks every indexed course root and its `_index.md`, refusing
+unindexed folders, duplicate names, changed identities, or occupied targets.
+Apply renames complete course folders, rebases absolute paths in the local
+index, and marks the course-root version. Each folder move is atomic on the
+same filesystem; if a later step fails, the tool attempts to roll back
+completed moves. Keep the backup until a sync and prep check pass. Do not run
+an older ID-root writer against the migrated vault; rollback requires restoring
+the matching vault and index backup together.
 
 ## Root metadata
 
@@ -52,12 +53,13 @@ operational course context rather than student-facing material.
 
 ## Course tree
 
-Each course lives in a deterministic, APFS-safe `course-<CanvasID>` directory.
-The Canvas ID keeps cross-listed courses with the same course code in separate
-vault roots; the course code remains visible in course metadata and navigation.
+Each course lives in a deterministic, APFS-safe directory named for its course
+code, such as `GSBGEN515`. The Canvas ID remains in frontmatter and the local
+index. If two indexed courses resolve to the same folder name, migration stops
+for manual review rather than merging their material.
 
 ```text
-course-17/
+GSBGEN515/
 ├── 00 Home.md
 ├── Week 01 - Sep 21/
 │   ├── 00 Overview.md

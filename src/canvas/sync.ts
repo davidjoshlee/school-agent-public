@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { writeDueSoonReminders } from "../engines/timeline.js"
 import { VaultWriter } from "../store/vault.js"
+import { displayCourseCode } from "./course-identity.js"
 import { type Course, dedupeCoursesById, listCourses } from "./endpoints.js"
 import { CanvasHttpError, TokenExpiredError } from "./http.js"
 import { syncCourse } from "./sync-course.js"
@@ -96,7 +97,7 @@ async function isolatedCourseSync(input: {
   } catch (error: unknown) {
     if (isAuthenticationError(error)) throw new CanvasSyncAuthenticationError()
     const courseId = String(input.course.id)
-    const courseCode = input.course.course_code ?? `course-${courseId}`
+    const courseCode = displayCourseCode(input.course)
     input.input.index.upsertSyncRun({
       canvasId: randomUUID(),
       courseCanvasId: courseId,

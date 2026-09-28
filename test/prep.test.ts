@@ -15,7 +15,7 @@ import {
 } from "../src/engines/prep.js"
 import { SpendCapExceededError } from "../src/models/cost.js"
 import { createSchoolIndex } from "../src/store/db.js"
-import { coursePaths } from "../src/store/paths.js"
+import { coursePaths, vaultLayout } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { parseVaultDocument, type VaultFrontmatter } from "../src/store/vault-document.js"
 import { realSchoolModels, schoolConfig } from "./helpers/schoolConfig.js"
@@ -83,6 +83,14 @@ async function put(
 
 async function fixtureVault(syllabus = "Week 1: Pricing under uncertainty."): Promise<string> {
   const root = await temporaryDirectory("school-agent-prep-")
+  await mkdir(join(root, "_meta"), { recursive: true })
+  await writeFile(
+    join(root, "_meta", "layout.json"),
+    JSON.stringify({
+      layout_version: vaultLayout.version,
+      course_root_version: vaultLayout.courseRootVersion,
+    }),
+  )
   const paths = coursePaths(root, course.code, course.canvasId)
   await put(paths.syllabus, syllabus)
   await put(paths.playbook, "Instructor rewards quantified trade-offs.")

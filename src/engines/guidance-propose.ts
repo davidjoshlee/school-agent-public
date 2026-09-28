@@ -22,6 +22,7 @@ import { assertUnderSpendCap, recordModelUsage } from "../models/cost.js"
 import { modelMappings } from "../models/index.js"
 import type { SchoolIndex } from "../store/db.js"
 import { coursePaths, vaultDocumentKinds } from "../store/paths.js"
+import { assertCourseRootLayoutReady } from "../store/vault-course-root-migration.js"
 import {
   createVaultFrontmatter,
   renderVaultDocument,
@@ -75,6 +76,7 @@ export class GuidanceProposeContentError extends Error {
 }
 
 export async function proposeGuidance(input: ProposeGuidanceInput): Promise<ProposeGuidanceResult> {
+  await assertCourseRootLayoutReady(input.vaultRoot)
   assertUnderSpendCap({
     index: input.index,
     cap: input.config.cost.maxMonthlySpendUSD,

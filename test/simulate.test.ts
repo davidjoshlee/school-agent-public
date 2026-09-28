@@ -7,7 +7,7 @@ import type { AgentRunner, AgentRunRecord, AgentRunResult } from "../src/agents/
 import type { SchoolConfig } from "../src/config/index.js"
 import { selectModulesForAssignment } from "../src/engines/retrieve-selection.js"
 import { runSimulation } from "../src/engines/simulate.js"
-import { coursePaths, slugify } from "../src/store/paths.js"
+import { coursePaths, slugify, vaultLayout } from "../src/store/paths.js"
 import { renderVaultDocument } from "../src/store/vault.js"
 import { createVaultFrontmatter } from "../src/store/vault-document.js"
 import { schoolConfig } from "./helpers/schoolConfig.js"
@@ -19,6 +19,17 @@ const course = {
   canvasUrl: "https://canvas.example.invalid/courses/course-17",
   aiPolicy: "allowed" as const,
 } as const
+
+async function markLayout(root: string): Promise<void> {
+  await mkdir(join(root, "_meta"), { recursive: true })
+  await writeFile(
+    join(root, "_meta", "layout.json"),
+    JSON.stringify({
+      layout_version: vaultLayout.version,
+      course_root_version: vaultLayout.courseRootVersion,
+    }),
+  )
+}
 
 function config(root: string): SchoolConfig {
   return schoolConfig({
@@ -33,7 +44,7 @@ function simulationRunDir(
   pilotCourseCode = basename(coursePaths("", course.code, course.canvasId).root),
 ): string {
   const weekKey = `${slugify(pilotCourseCode, `course-${course.canvasId}`)}-${slugify(course.canvasId, "unknown")}-${asOf}`
-  return join(weekKey, coursePaths("", course.code, course.canvasId).root)
+  return join(weekKey, coursePaths("", `${course.code}-${asOf}`, course.canvasId).root)
 }
 
 function document(content: string, dates: Readonly<Record<string, string>>): string {
@@ -63,6 +74,7 @@ async function put(
 
 async function fixtureVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-simulate-")
+  await markLayout(root)
   const paths = coursePaths(root, course.code, course.canvasId).legacy
   const indexContent = [
     "# STRAT 101",
@@ -122,6 +134,7 @@ async function simulationFiles(root: string): Promise<readonly string[]> {
 
 async function moduleScopedVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-simulate-module-")
+  await markLayout(root)
   const paths = coursePaths(root, course.code, course.canvasId)
   const indexContent = [
     "# STRAT 101",
@@ -218,6 +231,7 @@ async function moduleScopedVault(): Promise<string> {
  */
 async function moduleReleaseVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-simulate-release-")
+  await markLayout(root)
   const paths = coursePaths(root, course.code, course.canvasId).legacy
   const indexContent = [
     "# STRAT 101",
@@ -382,7 +396,7 @@ describe("as-of simulation", () => {
       // Then: the explicit empty week produces no course-week directory, report, or _simulations dir.
       expect(result.weeks).toEqual([{ asOf: "2024-01-01", status: "empty" }])
       expect(result.runDirs).toEqual([])
-      expect(await readdir(root)).toEqual(["strat-101"])
+      expect((await readdir(root)).sort()).toEqual(["_meta", "strat-101"])
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -428,6 +442,7 @@ describe("as-of simulation", () => {
 
       // Then: the guidance is present directly in the flat course-week dir so the replay can read it.
       expect(await readdir(root)).toEqual([
+        "_meta",
         "_simulations",
         basename(coursePaths(root, course.code, course.canvasId).root),
       ])

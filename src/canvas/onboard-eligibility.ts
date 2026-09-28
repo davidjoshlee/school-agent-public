@@ -1,3 +1,4 @@
+import { displayCourseCode } from "./course-identity.js"
 import {
   type Assignment,
   getOwnSubmission,
@@ -59,7 +60,7 @@ export async function probeUnresolvedCourse(
     kind: "eligible",
     course: {
       id,
-      code: courseCode ?? `course-${id}`,
+      code: displayCourseCode({ id, course_code: courseCode, name }),
       name: name ?? `Course ${id}`,
       enrollment: "unresolved",
     },

@@ -19,7 +19,7 @@ import {
 } from "../src/engines/assignment.js"
 import { SpendCapExceededError } from "../src/models/cost.js"
 import { createSchoolIndex } from "../src/store/db.js"
-import { coursePaths, xlsxSiblingPath } from "../src/store/paths.js"
+import { coursePaths, vaultLayout, xlsxSiblingPath } from "../src/store/paths.js"
 import { createVaultFrontmatter, renderVaultDocument } from "../src/store/vault-document.js"
 import { schoolConfig } from "./helpers/schoolConfig.js"
 import { temporaryDirectory } from "./helpers/tempDir.js"
@@ -87,6 +87,14 @@ async function put(path: string, content: string): Promise<void> {
 
 async function fixtureVault(): Promise<string> {
   const root = await temporaryDirectory("school-agent-assignment-")
+  await mkdir(join(root, "_meta"), { recursive: true })
+  await writeFile(
+    join(root, "_meta", "layout.json"),
+    JSON.stringify({
+      layout_version: vaultLayout.version,
+      course_root_version: vaultLayout.courseRootVersion,
+    }),
+  )
   const paths = coursePaths(root, course.code, course.canvasId)
   await put(paths.syllabus, "Week 1 pricing under uncertainty.")
   await put(join(paths.root, "Week 01 - Sep 01", "case.md"), "Contribution margin case.")

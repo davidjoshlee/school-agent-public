@@ -3,7 +3,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path"
 
 import Database from "better-sqlite3"
 
-import { coursePaths, vaultLayout } from "./paths.js"
+import { vaultLayout } from "./paths.js"
 import { parseVaultDocument } from "./vault-document.js"
 
 export type IndexedTable = "courses" | "modules" | "assignments" | "announcements" | "files"
@@ -87,7 +87,8 @@ export async function planIndexReconciliation(options: {
       if (within(vaultRoot, indexedPath) && (await exists(indexedPath))) return
       const candidates = catalog.get(key(courseCanvasId, table, row.canvas_id)) ?? []
       const unavailable = row.deleted === 1 || concluded.has(courseCanvasId)
-      const courseRootExists = await exists(coursePaths(vaultRoot, "", courseCanvasId).root)
+      const courseRootExists =
+        (catalog.get(key(courseCanvasId, "courses", courseCanvasId)) ?? []).length > 0
       const status: ReconcileStatus = unavailable
         ? "concluded-or-deleted"
         : candidates.length > 1
@@ -149,11 +150,7 @@ async function catalogSyncedDocuments(vaultRoot: string): Promise<Map<string, st
       const urlId = /(?:^|\/)courses\/([^/]+)/.exec(
         new URL(manifest.frontmatter.canvas_url).pathname,
       )?.[1]
-      if (
-        manifest.frontmatter.type !== "index" ||
-        urlId !== courseId ||
-        courseRoot !== coursePaths(vaultRoot, "", courseId).root
-      ) {
+      if (manifest.frontmatter.type !== "index" || urlId !== courseId) {
         continue
       }
     } catch {

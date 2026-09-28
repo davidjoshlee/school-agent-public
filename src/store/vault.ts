@@ -17,6 +17,7 @@ import {
   vaultPaths,
   versionedPath,
 } from "./paths.js"
+import { assertCourseRootLayoutReady } from "./vault-course-root-migration.js"
 import type { VaultFrontmatter, VaultSource, VaultStatus } from "./vault-document.js"
 import {
   createVaultFrontmatter,
@@ -263,10 +264,16 @@ export class VaultWriter {
   }
 
   private async initialize(): Promise<boolean> {
+    await assertCourseRootLayoutReady(this.#config.root)
     const paths = vaultPaths(this.#config.root)
     await mkdir(paths.metadata.directory, { recursive: true })
-    const layout = `${JSON.stringify({ layout_version: vaultLayout.version }, null, 2)}\n`
-    const changed = await writeIfChanged(paths.metadata.layout, layout)
+    const layout = `${JSON.stringify({ layout_version: vaultLayout.version, course_root_version: vaultLayout.courseRootVersion }, null, 2)}\n`
+    const previousLayout = await readOptional(paths.metadata.layout)
+    const alreadyCurrent =
+      previousLayout !== null &&
+      (JSON.parse(previousLayout) as { course_root_version?: unknown }).course_root_version ===
+        vaultLayout.courseRootVersion
+    const changed = alreadyCurrent ? false : await writeIfChanged(paths.metadata.layout, layout)
     if (this.#config.gitInit) {
       await this.#git.initialize()
     }
