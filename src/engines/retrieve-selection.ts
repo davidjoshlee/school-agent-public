@@ -1,4 +1,5 @@
 import { slugify, vaultLayout } from "../store/paths.js"
+import { localDateTimeToInstant } from "./meeting-recurrence.js"
 import { buildModuleMembership } from "./retrieve-module-index.js"
 import { type CourseModule, loadCourseModules } from "./retrieve-modules.js"
 
@@ -63,6 +64,7 @@ export async function selectModulesForAssignment(
 export async function selectModulesForPeriod(
   courseRoot: string,
   period: { readonly kind: "week" | "session"; readonly value: string },
+  options: { readonly timeZone?: string } = {},
 ): Promise<ModuleSelection> {
   const [modules, membership] = await Promise.all([
     loadCourseModules(courseRoot),
@@ -71,7 +73,7 @@ export async function selectModulesForPeriod(
   const matched =
     period.kind === "session"
       ? matchBySession(modules, period.value)
-      : matchByWeek(modules, period.value)
+      : matchByWeek(modules, period.value, options.timeZone)
   if (matched.length === 0) return { mode: "keyword-fallback" }
   return {
     mode: "module",
@@ -89,15 +91,33 @@ function matchBySession(
   return modules.filter((module) => pattern.test(module.title))
 }
 
-function matchByWeek(modules: readonly CourseModule[], dateValue: string): readonly CourseModule[] {
-  const start = Date.parse(dateValue)
-  if (!Number.isFinite(start)) return []
-  const end = start + 7 * 24 * 60 * 60 * 1000
+function matchByWeek(
+  modules: readonly CourseModule[],
+  dateValue: string,
+  timeZone?: string,
+): readonly CourseModule[] {
+  const bounds = weekBounds(dateValue, timeZone)
+  if (bounds === null) return []
+  const [start, end] = bounds
   return modules.filter(
     (module) =>
       inWindow(effectiveModuleDate(module), start, end) ||
       module.items.some((item) => inWindow(item.dueAt ?? null, start, end)),
   )
+}
+
+/** Explicit dates use local week boundaries for scheduled prep; legacy callers retain UTC. */
+export function weekBounds(dateValue: string, timeZone?: string): readonly [number, number] | null {
+  const start = Date.parse(dateValue)
+  if (!Number.isFinite(start)) return null
+  if (timeZone === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return [start, start + 7 * 24 * 60 * 60 * 1000]
+  }
+  const endDate = new Date(`${dateValue}T12:00:00Z`)
+  endDate.setUTCDate(endDate.getUTCDate() + 7)
+  const from = localDateTimeToInstant(dateValue, "00:00", timeZone)
+  const through = localDateTimeToInstant(endDate.toISOString().slice(0, 10), "00:00", timeZone)
+  return from === null || through === null ? null : [Date.parse(from), Date.parse(through)]
 }
 
 function inWindow(value: string | null, start: number, end: number): boolean {

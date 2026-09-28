@@ -7,6 +7,7 @@ import { registerSyncCommand } from "./canvas/sync-cli.js"
 import { registerConfigCommand } from "./config/config-cli.js"
 import { registerSetupCommand } from "./config/setup-cli.js"
 import { registerAssignmentCommand } from "./engines/assignment-cli.js"
+import { registerAutoPrepCommand } from "./engines/auto-prep-cli.js"
 import { registerCompareCommand } from "./engines/compare-cli.js"
 import { registerCostCommand } from "./engines/cost-cli.js"
 import { registerDogfoodCommand } from "./engines/dogfood-cli.js"
@@ -33,6 +34,7 @@ export function createProgram(): Command {
     .exitOverride()
 
   registerAssignmentCommand(program)
+  registerAutoPrepCommand(program)
   registerAuthCommand(program)
   registerCompareCommand(program)
   registerConfigCommand(program)
