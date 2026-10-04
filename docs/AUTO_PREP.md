@@ -1,5 +1,7 @@
 # Class schedule and automatic prep
 
+This feature is experimental and starts disabled. Synthetic tests cover scheduling and write guards; acceptance with a consenting real user's schedule, paid generation, generated-brief review, and native OS scheduler is still pending. Treat installation as an explicit opt-in to that experimental workflow.
+
 Automatic prep uses a class meeting schedule you confirm. Canvas enrollment helps classify courses as `enrolled`, `waitlisted`, `old`, or `unknown`; Canvas calendar entries appear as unconfirmed candidates. Only an explicitly saved recurring meeting for a currently enrolled course can trigger generation. `unknown`, waitlisted, and old courses are excluded.
 
 ## Confirm the schedule

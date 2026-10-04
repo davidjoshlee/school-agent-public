@@ -51,6 +51,80 @@ async function vaultPath() {
 }
 
 describe("automatic prep runner", () => {
+  it.each([
+    ["America/Los_Angeles", "2026-10-09T09:00:00-07:00"],
+    ["Pacific/Kiritimati", "2026-10-09T09:00:00+14:00"],
+    ["America/New_York", "2026-11-06T09:00:00-05:00"],
+  ])("does not revive expired Monday prep on Friday in %s", async (timeZone, now) => {
+    const vaultRoot = await vaultPath()
+    let prepared = 0
+    const report = await runAutoPrep({
+      client: client(),
+      config: {
+        autoPrep: {
+          ...autoPrep,
+          timeZone,
+          meetings: [
+            {
+              courseCanvasId: "42",
+              daysOfWeek: [1, 5],
+              localTime: "09:00",
+              startsOn: "2026-10-01",
+              endsOn: "2026-11-30",
+            },
+          ],
+        },
+      },
+      vaultRoot,
+      now,
+      execute: true,
+      prepare: async () => {
+        prepared++
+      },
+      hasExistingPrep: async () => false,
+    })
+    expect(report.plan.jobs).toEqual([])
+    expect(report.plan.skipped.some((item) => item.reason === "expired")).toBe(true)
+    expect(report.plan.skipped.some((item) => item.reason === "duplicate-week")).toBe(true)
+    expect(prepared).toBe(0)
+    await expect(access(vaultRoot)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  it.each([
+    ["America/Los_Angeles", "2026-10-04T09:00:00-07:00"],
+    ["Pacific/Kiritimati", "2026-10-04T09:00:00+14:00"],
+  ])("previews next Monday's week at its Sunday due boundary in %s", async (timeZone, now) => {
+    const report = await runAutoPrep({
+      client: client(),
+      config: {
+        autoPrep: {
+          ...autoPrep,
+          timeZone,
+          meetings: [
+            {
+              courseCanvasId: "42",
+              daysOfWeek: [1, 5],
+              localTime: "09:00",
+              startsOn: "2026-09-28",
+              endsOn: "2026-10-09",
+            },
+          ],
+        },
+      },
+      vaultRoot: await vaultPath(),
+      now,
+      prepare: async () => {
+        throw new Error("Preview must not generate")
+      },
+      hasExistingPrep: async () => false,
+    })
+    expect(report.outcomes).toHaveLength(1)
+    expect(report.outcomes[0]).toMatchObject({
+      status: "would-run",
+      job: { weekStart: "2026-10-05", dueAt: new Date(now).toISOString() },
+    })
+  })
+
   it("previews a due confirmed meeting without writing or preparing", async () => {
     const vaultRoot = await vaultPath()
     let prepared = 0

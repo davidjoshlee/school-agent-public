@@ -8,7 +8,7 @@ import { AISDKAgentRunner } from "../agents/runner.js"
 import type { SchoolConfig } from "../config/index.js"
 import { modelMappings } from "../models/index.js"
 import { createSchoolIndex } from "../store/db.js"
-import { coursePaths, periodPaths } from "../store/paths.js"
+import { coursePaths, periodPaths, vaultDocumentKinds, vaultLayout } from "../store/paths.js"
 import { parseVaultDocument } from "../store/vault-document.js"
 import { generatePrepBrief, prepPeriodPlacement } from "./prep.js"
 import { selectModulesForPeriod } from "./retrieve-selection.js"
@@ -47,13 +47,13 @@ export async function hasExistingWeeklyPrep(
     throw error
   }
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".md")) continue
-    if (!entry.parentPath.split(sep).includes("Prep")) continue
+    if (!entry.isFile() || !entry.name.endsWith(vaultLayout.markdownExtension)) continue
+    if (!entry.parentPath.split(sep).includes(vaultLayout.prepDirectory)) continue
     const path = join(entry.parentPath, entry.name)
     try {
       const document = parseVaultDocument(await readFile(path, "utf8"), path)
       if (
-        document.frontmatter.type === "prep" &&
+        document.frontmatter.type === vaultDocumentKinds.prep &&
         (document.frontmatter.canvas_id === `prep-week-${weekStart}` ||
           document.frontmatter.dates?.["period"] === `week-${weekStart}`)
       )

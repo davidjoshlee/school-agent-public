@@ -6,6 +6,7 @@ import { discoverCourseSchedule } from "../canvas/course-schedule.js"
 import type { CanvasHttpClient } from "../canvas/http.js"
 import type { SchoolConfig } from "../config/index.js"
 import { vaultPaths } from "../store/paths.js"
+import { hasErrorCode } from "../util/errors.js"
 import { expandConfirmedMeetings } from "./meeting-recurrence.js"
 import {
   planScheduledPrep,
@@ -61,8 +62,12 @@ export async function runAutoPrep(input: AutoPrepRunInput): Promise<AutoPrepRunR
   if (!Number.isFinite(nowMs)) throw new Error("now must be a valid instant")
   const auto = input.config.autoPrep
   const hourMs = 3_600_000
-  // UTC bounds are deliberately wider than the local window at both edges.
-  const fromDate = new Date(nowMs - (auto.windowHours + 48) * hourMs).toISOString().slice(0, 10)
+  // Retain the whole week preceding every possible catch-up meeting. Otherwise
+  // an expired first meeting can disappear and a later meeting can become due.
+  // The extra two days cover local-date offsets at both UTC window edges.
+  const fromDate = new Date(nowMs - (auto.windowHours + 7 * 24 + 48) * hourMs)
+    .toISOString()
+    .slice(0, 10)
   const throughDate = new Date(nowMs + (auto.leadHours + 48) * hourMs).toISOString().slice(0, 10)
   const meetings = expandConfirmedMeetings(auto.meetings, auto.timeZone, fromDate, throughDate)
   const courseIds = [...new Set(auto.meetings.map((rule) => rule.courseCanvasId))]
@@ -117,7 +122,7 @@ export async function runAutoPrep(input: AutoPrepRunInput): Promise<AutoPrepRunR
     try {
       await mkdir(lockPath)
     } catch (error: unknown) {
-      if (hasCode(error, "EEXIST")) {
+      if (hasErrorCode(error, "EEXIST")) {
         outcomes.push({ job, status: "locked", ledgerPath })
         continue
       }
@@ -166,7 +171,7 @@ async function readLedger(path: string): Promise<LedgerRecord | null> {
   try {
     content = await readFile(path, "utf8")
   } catch (error: unknown) {
-    if (hasCode(error, "ENOENT")) return null
+    if (hasErrorCode(error, "ENOENT")) return null
     throw error
   }
   const record: unknown = JSON.parse(content)
@@ -220,10 +225,6 @@ async function replaceLedger(
     await unlink(temporary)
     throw error
   }
-}
-
-function hasCode(error: unknown, code: string): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === code
 }
 
 function summarizeFailure(error: unknown): string {
