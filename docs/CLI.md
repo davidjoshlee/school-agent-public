@@ -1,6 +1,6 @@
 # School Agent CLI reference
 
-Run commands as `school-agent <command>`. The installed launcher finds `school.config.json` and automatically loads a `.env` beside it; no custom shell function or zsh configuration is required. Add `--help` to any command for its available options.
+Run commands as `school-agent <command>`. The launcher chooses an explicit `--config <path>`, then an existing current-directory `school.config.json`, then `~/.config/school-agent/school.config.json`; it loads the adjacent `.env`. No custom shell function or zsh configuration is required. Add `--help` to any command for its available options.
 
 Examples below use synthetic IDs and URLs.
 
@@ -12,18 +12,22 @@ school-agent doctor
 school-agent auth verify
 school-agent courses list --all
 school-agent onboard --all-active
-school-agent sync
 ```
 
-`setup` does not overwrite an existing `school.config.json` or adjacent `.env`. `doctor` treats a missing Canvas token as an error and a missing AI Gateway key as a warning, so local setup and sync remain possible before generation is configured.
+`setup` does not overwrite an existing config or adjacent `.env`. The launcher selects config in this order: explicit `--config <path>` (relative paths resolve from the current directory), an existing current-directory `school.config.json`, then `~/.config/school-agent/school.config.json`. Setup creates the parent directory for the user-level fallback. The selected config’s adjacent `.env` is loaded automatically; edit the file setup created to add credentials.
 
-`onboard --all-active` stores the active-course allowlist. Edit `courses.allowlist` before `sync` if you do not want every discovered active course read into the vault.
+`doctor` is an offline local check. A missing Canvas token is an error and a missing AI Gateway key is a warning, so setup and sync can proceed without AI credentials. `doctor --ai` is a separate opt-in probe: it validates the configured model catalogue and sends one small synthetic generation request for each distinct configured language model. The requests may incur small charges and do not include vault content. Get Canvas token instructions from your institution and [Instructure](https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account). To enable generation, follow the [Vercel AI Gateway API Keys guide](https://vercel.com/docs/ai-gateway/authentication-and-byok/api-keys) to create a key from the Vercel dashboard; account/team access and credits or billing may be required. Review [current pricing](https://vercel.com/docs/ai-gateway/pricing).
+
+To try the AI probe during setup, run `school-agent doctor --ai` after adding `AI_GATEWAY_API_KEY`; this step is optional and may incur a charge.
+
+`auth verify` checks Canvas with a read-only request. `onboard --all-active` stores every active course ID in the allowlist. Review `courses.allowlist` in the selected config and leave only one course for a first sync; then target that course explicitly. For first-time setup and the acceptance check, see [Onboarding](ONBOARDING.md).
 
 ## Configuration and authentication
 
 | Command | Purpose |
 | --- | --- |
 | `school-agent doctor` | Check installation, configuration, and credential readiness. |
+| `school-agent doctor --ai` | Opt into model catalogue validation and synthetic Gateway probes for each distinct configured language model; may incur charges and uses no vault text. |
 | `school-agent auth verify` | Verify the configured Canvas token with a read-only request. |
 | `school-agent auth status` | Show available token renewal state. |
 | `school-agent config validate` | Validate the configuration. |
@@ -49,12 +53,15 @@ For example:
 
 ```bash
 school-agent sync --course DEMO-101
+school-agent prep DEMO-101 --week 2026-10-05
 school-agent sync --course DEMO-101 --full
 school-agent ingest ./example-exhibit.pdf --course DEMO-101 --title "Example exhibit"
 school-agent vault health
 school-agent vault health --json
 school-agent vault reconcile-index
 ```
+
+For a first run, confirm the targeted sync completes, then open the dated prep brief under that course’s vault folder. Review its source list/provenance and confirm the listed files match the Canvas material you expected.
 
 `vault health` reports duplicate numbered Week directories, missing or out-of-root indexed paths, missing indexed files, and manifest-bearing course roots absent from the index. Its repair suggestions are advisory and are never applied by this command. `--json` prints the full audit and repair plan as JSON.
 

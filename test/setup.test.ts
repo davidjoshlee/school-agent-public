@@ -48,6 +48,19 @@ describe("friend setup", () => {
     expect(environment).not.toContain("<your")
   })
 
+  it("creates a missing configuration parent directory", async () => {
+    const directory = await temporaryDirectory()
+    const configurationPath = join(directory, ".config", "school-agent", "school.config.json")
+    const result = createStarterConfig(configurationPath, {
+      canvasUrl: "https://school.instructure.com",
+    })
+
+    expect(await readFile(result.configPath, "utf8")).toContain(
+      '"baseUrl": "https://school.instructure.com"',
+    )
+    expect(await readFile(result.environmentPath, "utf8")).toContain("CANVAS_TOKEN=")
+  })
+
   it("refuses setup before changing either file when a setup file already exists", async () => {
     const directory = await temporaryDirectory()
     const configurationPath = join(directory, "school.config.json")

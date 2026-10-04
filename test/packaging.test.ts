@@ -4,7 +4,8 @@ import { join } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
-import { loadEnvironmentForConfig } from "../bin/school.js"
+import { configPathFromArguments, loadEnvironmentForConfig } from "../bin/school.js"
+import { resolveConfigPath } from "../src/config/location.js"
 
 const temporaryDirectories: string[] = []
 
@@ -21,6 +22,27 @@ afterEach(() => {
 })
 
 describe("package launcher", () => {
+  it("uses the same explicit, legacy, and stable default config paths as the CLI", () => {
+    const directory = temporaryDirectory()
+    const home = join(directory, "home")
+    const expectedDefault = join(home, ".config", "school-agent", "school.config.json")
+    const resolveBoth = (args: string[]) => [
+      configPathFromArguments(args, directory, home),
+      resolveConfigPath(args, directory, home),
+    ]
+
+    expect(resolveBoth([])).toEqual([expectedDefault, expectedDefault])
+    expect(resolveBoth(["--config", "custom/config.json"])).toEqual([
+      join(directory, "custom/config.json"),
+      join(directory, "custom/config.json"),
+    ])
+    writeFileSync(join(directory, "school.config.json"), "{}", "utf8")
+    expect(resolveBoth([])).toEqual([
+      join(directory, "school.config.json"),
+      join(directory, "school.config.json"),
+    ])
+  })
+
   it("loads missing values from the .env beside an explicitly selected config", () => {
     const directory = temporaryDirectory()
     const configPath = join(directory, "elsewhere", "school.config.json")

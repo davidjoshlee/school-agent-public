@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, statSync, writeFileSync } from "node:fs"
+import { accessSync, constants, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 
@@ -44,6 +44,8 @@ export function createStarterConfig(
       `Setup refused: already exists: ${existing.join(", ")}. Nothing was changed.`,
     )
   }
+
+  mkdirSync(dirname(paths.config), { recursive: true, mode: 0o700 })
 
   const configuration = {
     canvas: { baseUrl: options.canvasUrl, tokenEnv: "CANVAS_TOKEN" },

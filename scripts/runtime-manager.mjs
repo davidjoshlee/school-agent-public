@@ -208,7 +208,6 @@ async function upgrade(options) {
       const scratchIndex = join(scratch, "index.sqlite")
       if (existsSync(index)) await copyDatabase(index, scratchIndex, candidate)
       migration = await migrationDryRun(candidate, scratchIndex)
-      run(process.execPath, [join(candidate, "bin/school.js"), "--help"], candidate)
       const scratchHome = join(scratch, "home")
       const scratchConfig = join(scratch, "config", "school.config.json")
       mkdirSync(dirname(scratchConfig), { recursive: true })
@@ -219,6 +218,12 @@ async function upgrade(options) {
         USERPROFILE: scratchHome,
         CANVAS_TOKEN: "synthetic-smoke-token",
       }
+      run(
+        process.execPath,
+        [join(candidate, "bin/school.js"), "--config", scratchConfig, "--help"],
+        candidate,
+        smokeEnv,
+      )
       run(
         process.execPath,
         [

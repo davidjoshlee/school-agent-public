@@ -1,23 +1,31 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, realpathSync } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 
-function configPathFromArguments(arguments_) {
+export function configPathFromArguments(
+  arguments_,
+  cwd = process.cwd(),
+  homeDirectory = homedir(),
+) {
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index]
     if (argument === "--config") {
       const value = arguments_[index + 1]
       if (value !== undefined) {
-        return resolve(value)
+        return resolve(cwd, value)
       }
     }
     if (argument.startsWith("--config=")) {
-      return resolve(argument.slice("--config=".length))
+      return resolve(cwd, argument.slice("--config=".length))
     }
   }
-  return resolve("school.config.json")
+  const legacyPath = resolve(cwd, "school.config.json")
+  return existsSync(legacyPath)
+    ? legacyPath
+    : resolve(homeDirectory, ".config", "school-agent", "school.config.json")
 }
 
 function dotenvEntries(content) {
@@ -68,7 +76,8 @@ export function loadEnvironmentForConfig(configPath, environment = process.env) 
 }
 
 async function main() {
-  loadEnvironmentForConfig(configPathFromArguments(process.argv.slice(2)))
+  const { loadEnvironmentForConfig, resolveConfigPath } = await import("../dist/config/location.js")
+  loadEnvironmentForConfig(resolveConfigPath(process.argv.slice(2)))
   await import("../dist/index.js")
 }
 
