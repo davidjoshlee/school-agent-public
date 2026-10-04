@@ -13,7 +13,7 @@ Canvas access is read-only. School Agent does not write to Canvas, post replies,
 
 ## Quick start
 
-Supported beta platforms: macOS and Linux with Node.js 22 or 24 and npm. Windows and mobile use are not supported or verified. Install a supported Node.js LTS release from [nodejs.org](https://nodejs.org/en/download); check with `node --version` and `npm --version`.
+Supported beta platforms: macOS and Linux with Node.js 22 or 24 and npm. Windows and mobile CLI use are not supported or verified. Optional iPhone reading copies are described below. Install a supported Node.js LTS release from [nodejs.org](https://nodejs.org/en/download); check with `node --version` and `npm --version`.
 
 The first-user onboarding baseline is `v0.1.1`. Install its `.tgz` asset from [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases) without cloning the repository:
 
@@ -75,6 +75,14 @@ Your first-run acceptance check is concrete: the targeted sync completes, `prep`
 
 For the fuller walkthrough, including key creation and troubleshooting, see [Onboarding](docs/ONBOARDING.md).
 
+## Optional Obsidian and Google Drive reading
+
+These commands are available in the current source checkout; the older `v0.1.1` release does not include them. After cloning or pulling, run `npm ci` and `npm run build`, then use `node bin/school.js` (or relink the CLI).
+
+`school-agent vault obsidian` previews your existing vault; `--apply` creates a guide without moving original files. Open that same folder in Obsidian. No account, paid sync plan, or cloud upload is configured by this command.
+
+For a one-way Google Drive/iPhone reading copy, preview `school-agent vault reading-copy --destination "/path/to/Google Drive/My Drive/School Agent Reading"`. Applying with `--current --apply` enables persistent `Current` refresh after successful CLI writes; a plain `--apply` creates a dated snapshot instead. Confirm the cloud account and course-sharing rules first. The working vault stays local, copies do not flow back, and Drive for desktop controls uploads. See [the access guide](docs/OBSIDIAN.md).
+
 ## Privacy, course material, and cost
 
 Your vault and index are stored locally. When you ask School Agent to generate a brief or draft, selected text from your local course material is transmitted to AI Gateway and its model providers to perform that request. Restricted files are excluded by default; verify your course rules and configuration before changing that setting.
@@ -95,4 +103,4 @@ Contributions are welcome—please read [CONTRIBUTING.md](CONTRIBUTING.md) and [
 
 Maintainers of pinned installations can use the [runtime upgrade and rollback guide](docs/runtime-upgrades.md) and [private parity check](docs/PARITY.md) before switching versions. Run `school-agent vault health` to get a read-only vault/index audit and advisory repair plan.
 
-Coding agents can use the optional [School Agent plugin](docs/PLUGIN.md) for product-specific guidance. It does not connect to Canvas or expose a user's vault.
+Coding agents should start with [AGENTS.md](AGENTS.md) for a fresh-clone onboarding and daily-use checklist. The optional [School Agent plugin](docs/PLUGIN.md) provides focused skills; it does not connect to Canvas or expose a user's vault.

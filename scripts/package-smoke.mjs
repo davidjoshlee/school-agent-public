@@ -143,6 +143,34 @@ try {
   if (config.canvas?.baseUrl !== "https://canvas.example.test") {
     throw new Error("setup did not write the requested Canvas URL")
   }
+
+  // Exercise reading access with the installed package, without cloud or user files.
+  const vaultPath = join(temporaryDirectory, "vault with spaces")
+  config.vault.path = vaultPath
+  config.index.path = join(temporaryDirectory, "index.db")
+  writeFileSync(defaultConfigPath, JSON.stringify(config), "utf8")
+  run(executable, ["vault", "obsidian"])
+  if (existsSync(vaultPath)) throw new Error("Obsidian preview unexpectedly created a vault")
+  run(executable, ["vault", "obsidian", "--apply"])
+  const guidePath = join(vaultPath, "00 School Agent.md")
+  if (!existsSync(guidePath)) throw new Error("Installed Obsidian command did not create a guide")
+  writeFileSync(guidePath, "User-edited guide", "utf8")
+  run(executable, ["vault", "obsidian", "--apply"])
+  if (readFileSync(guidePath, "utf8") !== "User-edited guide") {
+    throw new Error("Installed Obsidian command overwrote a user note")
+  }
+  writeFileSync(join(vaultPath, "example.md"), "# Synthetic reading", "utf8")
+  const readingDestination = join(temporaryDirectory, "reading copies")
+  const readingArguments = ["vault", "reading-copy", "--destination", readingDestination]
+  run(executable, readingArguments)
+  if (existsSync(readingDestination)) throw new Error("Reading-copy preview wrote files")
+  run(executable, [...readingArguments, "--apply"])
+  run(executable, [...readingArguments, "--current", "--apply"])
+  const readingPath = join(readingDestination, "Current", "example.md.txt")
+  if (readFileSync(readingPath, "utf8") !== "# Synthetic reading") {
+    throw new Error("Installed Current export did not preserve the synthetic reading")
+  }
+  run(executable, [...readingArguments, "--current", "--apply"])
 } finally {
   rmSync(temporaryDirectory, { recursive: true, force: true })
 }
