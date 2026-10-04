@@ -61,7 +61,7 @@ Markdown is exported as `.md.txt` for Drive text preview, with frontmatter remov
 
 Only allowlisted reading formats are exported. Hidden files/folders, `_meta` at every level, `_index.md`, simulations, old archives, databases, JSON state, and the Obsidian-only guide are excluded. Symlinks are not followed. This is not a complete content/secret audit. Copies of course materials are transmitted to your selected Google account: review course rules and keep the destination private. This does not give Google Drive end-to-end encryption or make the CLI remotely accessible.
 
-On iPhone, sign into that same account in Google Drive, open **My Drive → School Agent Reading → newest Reading folder**, and start with `00 READ ME.txt`. Mark desired files available offline in the phone app. Files on Drive are intended as a reading copy, not technically write-protected against their owner.
+On iPhone, sign into that same account in Google Drive, open **My Drive → School Agent Reading → Current** for persistent mode, or the **newest Reading folder** for snapshots, and start with `00 READ ME.txt`. Mark desired files available offline in the phone app. Files on Drive are intended as a reading copy, not technically write-protected against their owner.
 
 ## One primary agent computer
 
