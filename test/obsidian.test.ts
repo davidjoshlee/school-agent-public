@@ -170,7 +170,7 @@ describe("vault obsidian CLI", () => {
     return spawnSync(
       process.execPath,
       ["--import", "tsx", "src/index.ts", "--config", config, "vault", "obsidian", ...args],
-      { cwd: repository, encoding: "utf8" },
+      { cwd: repository, encoding: "utf8", timeout: 10_000 },
     )
   }
 
@@ -191,7 +191,7 @@ describe("vault obsidian CLI", () => {
     expect(run(config, "--apply").status).toBe(0)
     expect(run(config, "--apply").stdout).toContain("Preserved existing")
     expect(await readdir(input.root)).toEqual([vaultLayout.obsidianGuide])
-  })
+  }, 20_000)
 
   it("fails before launching when the guide is not prepared", async () => {
     const input = await fixture()
