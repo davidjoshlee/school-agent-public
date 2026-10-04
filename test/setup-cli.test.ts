@@ -95,4 +95,25 @@ describe("first-run setup CLI", () => {
     }
     expect(config.courses.allowlist).toEqual([])
   })
+
+  it("keeps doctor offline by default and makes --ai fail early when its key is blank", async () => {
+    const directory = await temporaryDirectory()
+    const configPath = join(directory, "school.config.json")
+    runSchool(["--config", configPath, "setup", "--canvas-url", "https://canvas.example.edu"])
+    const environment = {
+      ...process.env,
+      CANVAS_TOKEN: "synthetic-token",
+      AI_GATEWAY_API_KEY: "  ",
+    }
+
+    const offline = runSchool(["--config", configPath, "doctor", "--sync-only"], environment)
+    expect(offline.status).toBe(0)
+    expect(offline.stdout).not.toContain("AI readiness sends")
+
+    const ai = runSchool(["--config", configPath, "doctor", "--sync-only", "--ai"], environment)
+    expect(ai.status).toBe(1)
+    expect(ai.stdout).toContain("may incur provider charges")
+    expect(ai.stdout).toContain("AI Gateway key is missing or blank")
+    expect(ai.stdout).not.toContain("synthetic-token")
+  })
 })

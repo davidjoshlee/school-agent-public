@@ -13,16 +13,16 @@ Canvas access is read-only. School Agent does not write to Canvas, post replies,
 
 ## Quick start
 
-Supported: macOS and Linux with Node.js 22 or newer. Windows has not been verified.
+Supported beta platforms: macOS and Linux with Node.js 22 or 24 and npm. Windows and mobile use are not supported or verified. Install a supported Node.js LTS release from [nodejs.org](https://nodejs.org/en/download); check with `node --version` and `npm --version`.
 
-After the first tagged release, friends can use the `.tgz` install asset on the [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases) page. GitHub also provides a source archive for each release. The install asset is built for its matching tag and can be installed without cloning the repository:
+The first-user onboarding baseline is `v0.1.1`. Install its `.tgz` asset from [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases) without cloning the repository:
 
 ```bash
-npm install --global https://github.com/davidjoshlee/school-agent-public/releases/download/v0.1.0/school-agent-0.1.0.tgz
+npm install --global https://github.com/davidjoshlee/school-agent-public/releases/download/v0.1.1/school-agent-0.1.1.tgz
 school-agent --help
 ```
 
-This example will work once `v0.1.0` has been tagged and released. Replace the tag and filename with those shown on the release page for later releases. To install from source or help develop the project, use the commands below.
+Confirm the release and asset are available before installing; use the exact tag and `.tgz` filename shown on Releases. `v0.1.0` predates the user-level config discovery described below. To install from source or help develop the project, use the commands below.
 
 ```bash
 git clone https://github.com/davidjoshlee/school-agent-public.git
@@ -30,16 +30,23 @@ cd school-agent-public
 npm ci
 npm run build
 npm link
+```
 
-# Use your own Canvas host, for example https://canvas.example.edu
+After either installation route, initialize the local config for your institution (replace the example host):
+
+```bash
 school-agent setup --canvas-url https://canvas.example.edu
 ```
+
+`setup` creates `school.config.json` and an adjacent `.env`. The launcher chooses config in this order: explicit `--config <path>` (relative paths use the current directory), existing `school.config.json` in the current directory, then `~/.config/school-agent/school.config.json`. Setup creates the user-level config directory when needed. The selected config’s adjacent `.env` is loaded automatically. Open the newly created `.env` in a text editor and add credentials there; do not put secrets in a command, issue, or chat. Create a Canvas access token using your institution’s instructions and the [official Instructure guide](https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account). Some institutions disable self-service tokens or require approval; ask your Canvas support team if the option is missing. Choose an expiration if available and revoke the token when no longer needed.
+
+For generation, follow the [Vercel AI Gateway API Keys guide](https://vercel.com/docs/ai-gateway/authentication-and-byok/api-keys) to create a key from the Vercel dashboard, then add it as `AI_GATEWAY_API_KEY`. Vercel account/team access and billing or credits may be required; available credits and pricing can change, so check [current AI Gateway pricing](https://vercel.com/docs/ai-gateway/pricing). Generation is optional for Canvas setup and sync. `school-agent doctor` stays offline; `school-agent doctor --ai` is an opt-in check that makes a small synthetic request for each distinct configured language model, may incur charges, and does not send vault content.
 
 No npm registry publication is used; installs come from GitHub Releases or a source checkout.
 
 `setup` creates a new configuration only when neither `school.config.json` nor its adjacent `.env` already exists. Its conservative defaults are a vault at `~/school-vault`, no vault Git repository, an empty course allowlist, restricted-file handling set to `exclude`, a local index at `~/.local/share/school-agent/index.db`, and a $15 monthly model-spend cap. It will not overwrite existing setup files.
 
-Add your Canvas token and AI Gateway key to a `.env` file beside `school.config.json`:
+Add your Canvas token and, when you want generation, your AI Gateway key to the `.env` created by setup beside the selected config:
 
 ```dotenv
 CANVAS_TOKEN=replace_with_your_token
@@ -53,11 +60,18 @@ school-agent doctor
 school-agent auth verify
 school-agent courses list --all
 school-agent onboard --all-active
-school-agent sync
+```
+
+If you configured an AI Gateway key and want to test provider access, you can also run `school-agent doctor --ai`. This optional check validates the configured model catalogue and sends a small synthetic request for each distinct configured language model. It may incur a small charge and does not use vault content.
+
+`doctor` performs local checks only: it does not contact Canvas or an AI provider. A missing Canvas token is an error; a missing AI Gateway key is a warning, so you can still set up and sync. `auth verify` makes a read-only Canvas request. `onboard --all-active` records all active courses in the allowlist; edit `courses.allowlist` in the selected config to keep just one course for your first sync. Then run the first sync and prep:
+
+```bash
+school-agent sync --course <course-id>
 school-agent prep <course-id> --week <YYYY-MM-DD>
 ```
 
-`doctor` reports a missing Canvas token as an error. A missing AI Gateway key is a warning, so you can still set up and sync. `onboard --all-active` persists the active-course allowlist. Review `courses.allowlist` in `school.config.json` and remove any course you do not want synced before running `sync`.
+Your first-run acceptance check is concrete: the targeted sync completes, `prep` writes a dated brief under that course’s vault folder, and you open the brief to check that it has a source list/provenance and that those source files are the expected Canvas material. Treat the generated brief as a review aid, not verified work.
 
 For the fuller walkthrough, including key creation and troubleshooting, see [Onboarding](docs/ONBOARDING.md).
 

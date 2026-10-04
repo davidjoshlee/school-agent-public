@@ -20,6 +20,11 @@ jobs:
           cache: npm
       - name: Check tag matches package version
         run: |
+          CHECKED_OUT_SHA="$(git rev-parse HEAD)"
+          test "$CHECKED_OUT_SHA" = "$GITHUB_SHA" || {
+            echo "Checked out $CHECKED_OUT_SHA, expected tagged commit $GITHUB_SHA" >&2
+            exit 1
+          }
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           test "$PACKAGE_VERSION" = "$TAG_VERSION" || {
@@ -27,6 +32,8 @@ jobs:
             exit 1
           }
       - run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

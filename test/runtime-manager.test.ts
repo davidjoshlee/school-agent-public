@@ -15,6 +15,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import Database from "better-sqlite3"
+import { ModuleKind, transpileModule } from "typescript"
 import { afterEach, describe, expect, it } from "vitest"
 
 const project = resolve(fileURLToPath(new URL("..", import.meta.url)))
@@ -27,6 +28,14 @@ function fixture() {
   const candidate = join(base, "candidate")
   mkdirSync(join(candidate, "bin"), { recursive: true })
   mkdirSync(join(candidate, "dist", "store"), { recursive: true })
+  mkdirSync(join(candidate, "dist", "config"), { recursive: true })
+  // Include the real resolver without depending on a pre-existing local build.
+  writeFileSync(
+    join(candidate, "dist", "config", "location.js"),
+    transpileModule(readFileSync(join(project, "src/config/location.ts"), "utf8"), {
+      compilerOptions: { module: ModuleKind.ESNext },
+    }).outputText,
+  )
   writeFileSync(
     join(candidate, "dist", "store", "db-schema.js"),
     "export function migrateIndex() {}\n",

@@ -6,12 +6,24 @@ import { fileURLToPath } from "node:url"
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)))
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "school-agent-package-"))
+const isolatedHome = join(temporaryDirectory, "home")
+mkdirSync(isolatedHome)
+const smokeEnvironment = {
+  ...process.env,
+  HOME: isolatedHome,
+  USERPROFILE: isolatedHome,
+  npm_config_cache: join(isolatedHome, ".npm-cache"),
+}
+delete smokeEnvironment.CANVAS_TOKEN
+delete smokeEnvironment.AI_GATEWAY_API_KEY
+delete smokeEnvironment.VERCEL_OIDC_TOKEN
+delete smokeEnvironment.NPM_TOKEN
 
 function run(command, arguments_, options = {}) {
   const result = spawnSync(command, arguments_, {
     cwd: temporaryDirectory,
     encoding: "utf8",
-    env: process.env,
+    env: smokeEnvironment,
     ...options,
   })
   if (result.status !== 0) {
@@ -32,7 +44,7 @@ function installTarball(tarball) {
   const install = spawnSync("npm", arguments_, {
     cwd: temporaryDirectory,
     encoding: "utf8",
-    env: process.env,
+    env: smokeEnvironment,
   })
   if (install.status === 0) return
   const mode = offline ? "offline" : "online"
@@ -68,21 +80,66 @@ try {
   installTarball(tarball)
   const executable = join(temporaryDirectory, "node_modules", ".bin", "school")
   const alternateExecutable = join(temporaryDirectory, "node_modules", ".bin", "school-agent")
+  const defaultConfigPath = join(isolatedHome, ".config", "school-agent", "school.config.json")
+  const defaultEnvPath = join(isolatedHome, ".config", "school-agent", ".env")
   const configDirectory = join(temporaryDirectory, "configuration")
+  const alternateDirectory = join(temporaryDirectory, "alternate-cwd")
+  const legacyDirectory = join(temporaryDirectory, "legacy-cwd")
   mkdirSync(configDirectory)
-  const configPath = join(configDirectory, "school.config.json")
+  mkdirSync(alternateDirectory)
+  mkdirSync(legacyDirectory)
+  const explicitConfigPath = join(configDirectory, "school.config.json")
 
+  const expectedVersion = `${packResult[0].version}\n`
+  for (const command of [executable, alternateExecutable]) {
+    const actualVersion = run(command, ["--version"])
+    if (actualVersion !== expectedVersion) {
+      throw new Error(
+        `installed CLI reported ${actualVersion.trim()}, expected ${expectedVersion.trim()}`,
+      )
+    }
+  }
   run(executable, ["--help"])
   run(alternateExecutable, ["--help"])
-  run(executable, ["--config", configPath, "setup", "--canvas-url", "https://canvas.example.test"])
-  writeFileSync(
-    join(configDirectory, ".env"),
-    "CANVAS_TOKEN=dotenv-token\nAI_GATEWAY_API_KEY=dotenv-key\n",
-    "utf8",
-  )
-  run(executable, ["--config", configPath, "doctor"])
+  // HOME is isolated for every packaged command, keeping setup output private
+  // to this disposable smoke-test directory.
+  run(executable, ["setup", "--canvas-url", "https://canvas.example.test"])
+  if (!existsSync(defaultConfigPath) || !existsSync(defaultEnvPath)) {
+    throw new Error("default setup did not create config and adjacent .env under isolated HOME")
+  }
+  writeFileSync(defaultEnvPath, "CANVAS_TOKEN=synthetic-token\n", "utf8")
 
-  const config = JSON.parse(readFileSync(configPath, "utf8"))
+  const defaultDoctor = run(executable, ["doctor"], { cwd: alternateDirectory })
+  if (!defaultDoctor.includes(defaultConfigPath)) {
+    throw new Error("doctor from another cwd did not use the default user-level config")
+  }
+
+  const legacyConfigPath = join(legacyDirectory, "school.config.json")
+  const legacyConfig = JSON.parse(readFileSync(defaultConfigPath, "utf8"))
+  legacyConfig.canvas.baseUrl = "https://legacy.example.test"
+  writeFileSync(legacyConfigPath, `${JSON.stringify(legacyConfig, null, 2)}\n`, "utf8")
+  writeFileSync(join(legacyDirectory, ".env"), "CANVAS_TOKEN=synthetic-token\n", "utf8")
+  const legacyDoctor = run(executable, ["doctor"], { cwd: legacyDirectory })
+  if (!legacyDoctor.includes(legacyConfigPath)) {
+    throw new Error("doctor did not prefer an existing cwd school.config.json")
+  }
+
+  run(executable, [
+    "--config",
+    explicitConfigPath,
+    "setup",
+    "--canvas-url",
+    "https://explicit.example.test",
+  ])
+  writeFileSync(join(configDirectory, ".env"), "CANVAS_TOKEN=synthetic-token\n", "utf8")
+  const explicitDoctor = run(executable, ["--config", explicitConfigPath, "doctor"], {
+    cwd: legacyDirectory,
+  })
+  if (!explicitDoctor.includes(explicitConfigPath)) {
+    throw new Error("doctor did not prefer an explicitly selected config")
+  }
+
+  const config = JSON.parse(readFileSync(defaultConfigPath, "utf8"))
   if (config.canvas?.baseUrl !== "https://canvas.example.test") {
     throw new Error("setup did not write the requested Canvas URL")
   }

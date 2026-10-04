@@ -5,6 +5,7 @@ import { registerIngestCommand } from "./canvas/ingest-cli.js"
 import { registerOnboardCommand } from "./canvas/onboard-cli.js"
 import { registerSyncCommand } from "./canvas/sync-cli.js"
 import { registerConfigCommand } from "./config/config-cli.js"
+import { loadEnvironmentForConfig, resolveConfigPath } from "./config/location.js"
 import { registerSetupCommand } from "./config/setup-cli.js"
 import { registerAssignmentCommand } from "./engines/assignment-cli.js"
 import { registerCompareCommand } from "./engines/compare-cli.js"
@@ -18,17 +19,20 @@ import { registerSimulateCommand } from "./engines/simulate-cli.js"
 import { registerTimelineCommand } from "./engines/timeline-cli.js"
 import { registerModelsCommand } from "./models/models-cli.js"
 import { registerVaultCommand } from "./store/vault-cli.js"
+import { getPackageVersion } from "./version.js"
 
 export type RootOptions = {
   readonly config: string
   readonly model?: string
 }
 
-export function createProgram(): Command {
+export function createProgram(arguments_: readonly string[] = process.argv.slice(2)): Command {
+  const configPath = resolveConfigPath(arguments_)
   const program = new Command()
     .name("school")
     .description("School agent CLI")
-    .option("--config <path>", "path to school.config.json", "school.config.json")
+    .version(getPackageVersion())
+    .option("--config <path>", "path to school.config.json", configPath)
     .option("--model <model-id>", "override every model mapping for this run")
     .exitOverride()
 
@@ -56,7 +60,9 @@ export function createProgram(): Command {
 
 export async function runCli(arguments_: readonly string[]): Promise<number> {
   try {
-    await createProgram().parseAsync(["node", "school", ...arguments_])
+    const configPath = resolveConfigPath(arguments_)
+    loadEnvironmentForConfig(configPath)
+    await createProgram(arguments_).parseAsync(["node", "school", ...arguments_])
     return 0
   } catch (error) {
     if (error instanceof CommanderError && error.exitCode === 0) return 0
