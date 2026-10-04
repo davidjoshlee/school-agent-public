@@ -4,6 +4,8 @@ import type { Command } from "commander"
 import type { RootOptions } from "../cli.js"
 import { loadConfig } from "../config/index.js"
 import { planIndexReconciliation } from "./index-reconcile-plan.js"
+import { registerObsidianCommand } from "./obsidian-cli.js"
+import { registerReadingCopyCommand } from "./reading-copy-cli.js"
 import {
   executeCourseRootMigration,
   planCourseRootMigration,
@@ -13,6 +15,8 @@ import { executeVaultMigration, planVaultMigration } from "./vault-migration.js"
 
 export function registerVaultCommand(program: Command): void {
   const vault = program.command("vault").description("Manage the local Markdown vault")
+  registerObsidianCommand(vault, program)
+  registerReadingCopyCommand(vault, program)
   const reconcile = vault
     .command("reconcile-index")
     .description("Classify missing indexed paths and suggest safe relinks (read-only)")

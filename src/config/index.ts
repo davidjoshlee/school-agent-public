@@ -199,29 +199,22 @@ export function loadConfig(configPath: string, homeDirectory = homedir()): Schoo
 }
 
 export function persistCourseSelection(configPath: string, courseIds: readonly string[]): void {
-  const configuration = parseUserConfig(readFileSync(configPath, "utf8"))
-  writeFileSync(
-    configPath,
-    `${JSON.stringify(
-      {
-        ...configuration,
-        courses: { ...configuration.courses, mode: "list", allowlist: [...new Set(courseIds)] },
-      },
-      null,
-      2,
-    )}\n`,
-    "utf8",
-  )
+  persistCourses(configPath, { mode: "list", allowlist: [...new Set(courseIds)] })
 }
 
 export function persistPilotCourse(configPath: string, pilotCourseId: string): void {
+  persistCourses(configPath, { pilotCourseId })
+}
+
+/** Validate and serialize course changes without replacing unrelated settings. */
+function persistCourses(configPath: string, changes: Partial<SchoolConfig["courses"]>): void {
   const configuration = parseUserConfig(readFileSync(configPath, "utf8"))
   writeFileSync(
     configPath,
     `${JSON.stringify(
       {
         ...configuration,
-        courses: { ...configuration.courses, pilotCourseId },
+        courses: { ...configuration.courses, ...changes },
       },
       null,
       2,

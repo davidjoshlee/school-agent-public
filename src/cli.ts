@@ -18,6 +18,7 @@ import { registerPrepCommand } from "./engines/prep-cli.js"
 import { registerSimulateCommand } from "./engines/simulate-cli.js"
 import { registerTimelineCommand } from "./engines/timeline-cli.js"
 import { registerModelsCommand } from "./models/models-cli.js"
+import { registerReadingMirrorHook } from "./store/reading-mirror-hook.js"
 import { registerVaultCommand } from "./store/vault-cli.js"
 import { getPackageVersion } from "./version.js"
 
@@ -54,6 +55,7 @@ export function createProgram(arguments_: readonly string[] = process.argv.slice
   registerSyncCommand(program)
   registerTimelineCommand(program)
   registerVaultCommand(program)
+  registerReadingMirrorHook(program)
 
   return program
 }

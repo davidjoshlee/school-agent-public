@@ -32,20 +32,21 @@ const reconciliationRowSchema = z.object({
 })
 
 export function queryCourseByCode(db: Database, courseCode: string): IndexedCourse | null {
-  const row = db
-    .prepare("SELECT canvas_id, course_code FROM courses WHERE course_code = ? LIMIT 1")
-    .get(courseCode)
-  if (row === undefined) {
-    return null
-  }
-  const course = courseRowSchema.parse(row)
-  return { canvasId: course.canvas_id, courseCode: course.course_code }
+  return queryCourse(db, "course_code", courseCode)
 }
 
 export function queryCourseByCanvasId(db: Database, canvasId: string): IndexedCourse | null {
+  return queryCourse(db, "canvas_id", canvasId)
+}
+
+function queryCourse(
+  db: Database,
+  field: "canvas_id" | "course_code",
+  value: string,
+): IndexedCourse | null {
   const row = db
-    .prepare("SELECT canvas_id, course_code FROM courses WHERE canvas_id = ? LIMIT 1")
-    .get(canvasId)
+    .prepare(`SELECT canvas_id, course_code FROM courses WHERE ${field} = ? LIMIT 1`)
+    .get(value)
   if (row === undefined) {
     return null
   }

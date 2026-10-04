@@ -18,11 +18,14 @@ export const vaultLayout = {
   alert: "ALERT.md",
   contextLog: "model-context-log.jsonl",
   layoutMetadata: "layout.json",
+  readingMirrorState: "reading-mirror.json",
+  readingMirrorLock: "reading-mirror.lock",
   dogfood: "dogfood",
   coursePlaybook: "course-playbook.md",
 
   // Human-facing v2 course tree.
   home: "00 Home.md",
+  obsidianGuide: "00 School Agent.md",
   overview: "00 Overview.md",
   prompt: "00 Prompt.md",
   assignmentsIndex: "00 Assignments.md",
@@ -91,6 +94,7 @@ export const layoutSegments = [
   vaultLayout.dogfood,
   vaultLayout.coursePlaybook,
   vaultLayout.home,
+  vaultLayout.obsidianGuide,
   vaultLayout.overview,
   vaultLayout.prompt,
   vaultLayout.assignmentsIndex,

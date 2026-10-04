@@ -100,6 +100,20 @@ describe("file extraction", () => {
     },
   )
 
+  it("normalizes MIME case and parameters for text and legacy spreadsheet detection", async () => {
+    const bytes = new TextEncoder().encode("Synthetic text")
+    expect(
+      await extractText({ bytes, contentType: "TEXT/PLAIN;charset=utf-8", filename: "notes.bin" }),
+    ).toEqual({ extracted: true, degraded: false, text: "Synthetic text" })
+    expect(
+      await extractText({
+        bytes,
+        contentType: "APPLICATION/VND.MS-EXCEL;version=8",
+        filename: "sheet.bin",
+      }),
+    ).toMatchObject({ extracted: false, degraded: true })
+  })
+
   it("degrades a legacy .xls (OLE binary) with an actionable message instead of returning empty", async () => {
     // Given: bytes carrying the OLE compound-file magic header, as a real binary .xls would.
     const bytes = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0, 0, 0, 0])

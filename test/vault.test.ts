@@ -13,6 +13,7 @@ import {
   iCloudStubPath,
   layoutSegments,
   vaultDocumentKinds,
+  vaultPaths,
   versionedPath,
 } from "../src/store/paths.js"
 import {
@@ -265,8 +266,8 @@ describe("VaultWriter", () => {
     const root = await temporaryVault()
     const writer = new VaultWriter({ root, gitInit: true })
 
-    // When: the writer persists a document.
-    await writer.write({
+    // When: the writer persists a document and receives the same input again.
+    const input = {
       course,
       kind: vaultDocumentKinds.syllabus,
       title: "Syllabus",
@@ -275,15 +276,24 @@ describe("VaultWriter", () => {
       content: "Syllabus text.\n",
       source: vaultSources.sync,
       status: vaultStatuses.approved,
-    })
+    }
+    await writer.write(input)
+    const commitCount = (await execute("git", ["rev-list", "--count", "HEAD"], { cwd: root }))
+      .stdout
+    const repeated = await writer.write(input)
+    const repeatedCommitCount = (
+      await execute("git", ["rev-list", "--count", "HEAD"], { cwd: root })
+    ).stdout
 
-    // Then: git exists locally and has no configured remotes.
+    // Then: git exists locally, has no remotes, and an unchanged rerun adds no commit.
     await expect(stat(join(root, ".git"))).resolves.toBeDefined()
     const remote = await execute("git", ["remote", "-v"], { cwd: root })
     expect(remote.stdout).toBe("")
+    expect(repeated.kind).toBe("unchanged")
+    expect(repeatedCommitCount).toBe(commitCount)
   })
 
-  it("versions a pending draft and skips an iCloud placeholder", async () => {
+  it("versions a pending draft and skips iCloud placeholders for course, navigation, and metadata writes", async () => {
     // Given: a pending draft and an iCloud placeholder for a synced assignment.
     const root = await temporaryVault()
     const warnings: string[] = []
@@ -323,12 +333,28 @@ describe("VaultWriter", () => {
     // When: a new draft is generated and the placeholder is encountered.
     const secondDraft = await writer.write({ ...draft, content: "Version two.\n" })
     const skipped = await writer.write(assignment)
+    const homePath = coursePaths(root, course.code, course.canvasId).home
+    await writeFile(iCloudStubPath(homePath), "placeholder", "utf8")
+    const skippedNavigation = await writer.writeNavigation({
+      course,
+      path: "00 Home.md",
+      content: "Course navigation.\n",
+    })
+    const alertPath = vaultPaths(root).metadata.alert
+    await writeFile(iCloudStubPath(alertPath), "placeholder", "utf8")
+    const skippedMetadata = await writer.writeMetadata({
+      artifact: "alert",
+      canvasUrl: course.canvasUrl,
+      content: "Vault alert.\n",
+    })
 
-    // Then: the original draft survives, a versioned sibling is created, and the stub is warned and skipped.
+    // Then: protected draft content survives, and every writer variant warns and skips its target.
     expect(secondDraft).toEqual({ kind: "versioned", path: versionedPath(firstDraft.path, 2) })
     expect(parseVaultDocument(await readFile(firstDraft.path, "utf8")).content).toBe(draft.content)
     expect(skipped).toEqual({ kind: "skipped", path: assignmentPath })
-    expect(warnings).toHaveLength(1)
+    expect(skippedNavigation).toEqual({ kind: "skipped", path: homePath })
+    expect(skippedMetadata).toEqual({ kind: "skipped", path: alertPath })
+    expect(warnings).toHaveLength(3)
   })
 
   it("keeps layout names centralized in paths.ts", async () => {

@@ -78,7 +78,8 @@ async function recentAssignmentMaterial(assignmentsDir: string): Promise<{
     const isFeedback = entry.name.endsWith(vaultLayout.feedback)
     const parsed = await readMaterial(path)
     if (parsed === null) continue
-    ;(isFeedback ? feedback : assignments).push({ path, text: parsed.text, date: parsed.date })
+    const target = isFeedback ? feedback : assignments
+    target.push({ path, text: parsed.text, date: parsed.date })
   }
   const byRecency = (left: MaterialEntry, right: MaterialEntry): number =>
     right.date.localeCompare(left.date)

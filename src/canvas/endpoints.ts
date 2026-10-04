@@ -68,7 +68,11 @@ export const CourseEnrollmentStates = ["active", "completed"] as const
 export type CourseEnrollmentState = (typeof CourseEnrollmentStates)[number]
 
 function coursePath(courseId: CanvasId): string {
-  return `/api/v1/courses/${encodeURIComponent(String(courseId))}`
+  return `/api/v1/courses/${canvasIdPath(courseId)}`
+}
+
+function canvasIdPath(id: CanvasId): string {
+  return encodeURIComponent(String(id))
 }
 
 function endpoint(path: string, parameters: readonly (readonly [string, string])[]): string {
@@ -192,11 +196,7 @@ export function getFile(
   courseId: CanvasId,
   fileId: CanvasId,
 ): Promise<CanvasFile> {
-  return resource(
-    client,
-    `${coursePath(courseId)}/files/${encodeURIComponent(String(fileId))}`,
-    FileSchema,
-  )
+  return resource(client, `${coursePath(courseId)}/files/${canvasIdPath(fileId)}`, FileSchema)
 }
 
 export function listPlannerItems(
@@ -240,11 +240,7 @@ export function getQuiz(
   courseId: CanvasId,
   quizId: CanvasId,
 ): Promise<Quiz> {
-  return resource(
-    client,
-    `${coursePath(courseId)}/quizzes/${encodeURIComponent(String(quizId))}`,
-    QuizSchema,
-  )
+  return resource(client, `${coursePath(courseId)}/quizzes/${canvasIdPath(quizId)}`, QuizSchema)
 }
 
 export function listQuizQuestions(
@@ -254,7 +250,7 @@ export function listQuizQuestions(
 ): Promise<readonly QuizQuestion[]> {
   return collection(
     client,
-    `${coursePath(courseId)}/quizzes/${encodeURIComponent(String(quizId))}/questions`,
+    `${coursePath(courseId)}/quizzes/${canvasIdPath(quizId)}/questions`,
     QuizQuestionSchema,
   )
 }
@@ -270,15 +266,12 @@ export function getOwnSubmission(
 ): Promise<OwnSubmission> {
   return resource(
     client,
-    endpoint(
-      `${coursePath(courseId)}/assignments/${encodeURIComponent(String(assignmentId))}/submissions/self`,
-      [
-        ["include[]", "submission_history"],
-        ["include[]", "rubric_assessment"],
-        ["include[]", "submission_comments"],
-        ["include[]", "attachments"],
-      ],
-    ),
+    endpoint(`${coursePath(courseId)}/assignments/${canvasIdPath(assignmentId)}/submissions/self`, [
+      ["include[]", "submission_history"],
+      ["include[]", "rubric_assessment"],
+      ["include[]", "submission_comments"],
+      ["include[]", "attachments"],
+    ]),
     OwnSubmissionSchema,
   )
 }

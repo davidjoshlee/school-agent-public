@@ -13,7 +13,7 @@ codex plugin add school-agent@personal
 
 Start a new Codex conversation after installation so the skills are available. Codex can select the matching focused skill from the user's task; the development skill applies when changing this repository.
 
-The v2 vault guidance ships as plugin version `0.3.0`. To refresh an existing Codex installation after a plugin version change, remove and reinstall it, then start a new conversation so the refreshed skill files are loaded:
+The current onboarding and optional reading-copy guidance ships as plugin version `0.3.1`. To refresh an existing Codex installation after a plugin version change, remove and reinstall it, then start a new conversation so the refreshed skill files are loaded:
 
 ```bash
 codex plugin remove school-agent@personal

@@ -18,6 +18,7 @@ import {
   listFiles,
   listModules,
   listPlannerItems,
+  listQuizQuestions,
   listQuizzes,
   OwnSubmissionSchema,
 } from "../src/canvas/endpoints.js"
@@ -63,6 +64,20 @@ function responseBody(pathname: string): unknown {
 }
 
 describe("Canvas typed read endpoints", () => {
+  it("encodes Canvas IDs consistently when building resource paths", async () => {
+    const requested: string[] = []
+    server.use(
+      http.get("https://canvas.test/api/v1/*", ({ request }) => {
+        requested.push(new URL(request.url).pathname)
+        return HttpResponse.json([])
+      }),
+    )
+
+    await listQuizQuestions(client(), "course/one", "quiz/one")
+
+    expect(requested).toEqual(["/api/v1/courses/course%2Fone/quizzes/quiz%2Fone/questions"])
+  })
+
   it("uses only GET routes and excludes peer-content routes", () => {
     // Given: the endpoint route table.
 

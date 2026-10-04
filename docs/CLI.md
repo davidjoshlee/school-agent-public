@@ -48,6 +48,11 @@ Keep `CANVAS_TOKEN` and `AI_GATEWAY_API_KEY` in the adjacent `.env`, never in a 
 | `school-agent vault health [--json]` | Audit vault and SQLite index consistency without making changes. Returns a nonzero status when issues are found. |
 | `school-agent vault reconcile-index [--json]` | Classify missing indexed paths and show unique local relink candidates; read-only. |
 | `school-agent vault migrate` | Check or migrate vault layout where supported. |
+| `school-agent vault obsidian [--apply] [--open]` | Preview the local vault, optionally create a guide or request opening Obsidian; does not configure cloud sync. |
+| `school-agent vault reading-copy --destination <folder> [--apply]` | Preview or create a new one-way dated reading snapshot. |
+| `school-agent vault reading-copy --destination <folder> --current --apply` | Opt into a persistent `Current` copy and refresh after successful writing commands; preserve replaced copies under `Recovered`. |
+
+Obsidian and reading-copy commands are in the current source checkout, not the older `v0.1.1` release. Build after pulling and use `node bin/school.js` or relink the source installation. A Drive-backed destination can upload coursework; confirm the account, destination and sharing rules before applying. See [the access guide](OBSIDIAN.md). Read-only and discussion commands do not refresh `Current`; Finder/Obsidian edits need a manual refresh. There is no reverse sync or remote CLI.
 
 For example:
 

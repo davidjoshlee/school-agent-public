@@ -29,6 +29,8 @@ npm run build
 npm link
 ```
 
+After a source pull, rerun `npm ci` and `npm run build`. Use `node bin/school.js` from the checkout to avoid invoking a separately installed older release; replace `school-agent` with that command in the steps below. Agents should start with [AGENTS.md](../AGENTS.md).
+
 After either installation route, initialize your config for your institution (replace the example host):
 
 ```bash
@@ -84,6 +86,10 @@ school-agent prep <course-id> --week <YYYY-MM-DD>
 ```
 
 For the first-run acceptance check, confirm the targeted sync finishes; then find the dated prep brief in the course’s vault folder and open it. Review its source list/provenance and verify the cited files are the material you expected from Canvas. `sync` only reads Canvas. It never posts, submits work, or modifies course data.
+
+## Optional reading on other devices
+
+First complete the local one-course sync and review. Then use [the Obsidian/Google Drive guide](OBSIDIAN.md) for optional reading access. These commands are in current source, not release `v0.1.1`. They do not move the working vault or run the CLI on a phone. Before applying a reading export, confirm the Google account, private destination and course rules. Keep config, credentials, index and agent-run state local. `Current` is one-way and refreshes automatically only after explicitly opting in; a dated snapshot is manual. Neither provides reverse sync or remote execution.
 
 ## Privacy and responsible use
 

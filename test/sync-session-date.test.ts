@@ -15,6 +15,15 @@ describe("parseSessionDate", () => {
     expect(parseSessionDate("Session 8 (10/16)", 2025)).toBe("2025-10-16")
   })
 
+  it("rejects impossible calendar dates while accepting leap days", () => {
+    expect(parseSessionDate("Session 8 (February 31)", 2025)).toBeUndefined()
+    expect(parseSessionDate("Session 8 (4/31)", 2025)).toBeUndefined()
+    expect(parseSessionDate("Session 8 (February 29)", 2025)).toBeUndefined()
+    expect(parseSessionDate("Session 8 (February 29)", 2024)).toBe("2024-02-29")
+    expect(parseSessionDate("Session 8 (2/29)", 2024)).toBe("2024-02-29")
+    expect(parseSessionDate("Session 8 (February 29)", Number.NaN)).toBeUndefined()
+  })
+
   it("returns undefined when courseYear cannot be resolved", () => {
     expect(parseSessionDate("Session 8 (October 16)", undefined)).toBeUndefined()
   })
