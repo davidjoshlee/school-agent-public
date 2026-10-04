@@ -1,8 +1,8 @@
-# School Agent v0.1.1 release candidate
+# School Agent v0.1.1 release notes
 
-Status: candidate prepared; not published. No release tag or install tarball exists yet.
+Check [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases/tag/v0.1.1) for the published tag and install asset. These notes do not substitute for a successful release workflow.
 
-This candidate is for the macOS and Linux local CLI beta. Windows and mobile are not supported or verified. See [Onboarding](ONBOARDING.md) for the stable configuration defaults and `.env` behavior.
+This version is for the macOS and Linux local CLI beta. Windows and mobile are not supported or verified. See [Onboarding](ONBOARDING.md) for the stable configuration defaults and `.env` behavior.
 
 ## What changed since v0.1.0
 
@@ -21,6 +21,6 @@ Setup starts with an empty explicit course allowlist, local `~/school-vault` sto
 
 Vault folders and filenames remain human-readable. Avoid screenshots, examples, or reports containing real course names, account identifiers, Canvas URLs, tokens, or coursework when sharing diagnostics.
 
-## Install after publication
+## Install
 
-After approval and publication, use the exact `.tgz` asset URL attached to the `v0.1.1` GitHub Release. Until then, the version and asset URL are planned candidate values only.
+Use the exact `.tgz` asset URL attached to the `v0.1.1` GitHub Release after verifying that the release workflow completed successfully.

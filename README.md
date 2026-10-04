@@ -15,14 +15,14 @@ Canvas access is read-only. School Agent does not write to Canvas, post replies,
 
 Supported beta platforms: macOS and Linux with Node.js 22 or 24 and npm. Windows and mobile use are not supported or verified. Install a supported Node.js LTS release from [nodejs.org](https://nodejs.org/en/download); check with `node --version` and `npm --version`.
 
-The next onboarding baseline is planned for `v0.1.1` and has not been published yet. Once it appears on [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases), install its `.tgz` asset directly without cloning the repository:
+The first-user onboarding baseline is `v0.1.1`. Install its `.tgz` asset from [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases) without cloning the repository:
 
 ```bash
 npm install --global https://github.com/davidjoshlee/school-agent-public/releases/download/v0.1.1/school-agent-0.1.1.tgz
 school-agent --help
 ```
 
-This URL will work only after `v0.1.1` is published; use the exact tag and `.tgz` filename shown on Releases. `v0.1.0` is already released but predates the user-level config discovery described below. To install from source or help develop the project, use the commands below.
+Confirm the release and asset are available before installing; use the exact tag and `.tgz` filename shown on Releases. `v0.1.0` predates the user-level config discovery described below. To install from source or help develop the project, use the commands below.
 
 ```bash
 git clone https://github.com/davidjoshlee/school-agent-public.git

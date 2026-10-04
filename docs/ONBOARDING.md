@@ -12,14 +12,14 @@ Install Node.js from [nodejs.org](https://nodejs.org/en/download), then confirm 
 
 ## Install and initialize
 
-The next onboarding baseline is planned for `v0.1.1` and has not been published yet. Once it appears on [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases), install its `.tgz` asset directly without cloning the repository:
+The first-user onboarding baseline is `v0.1.1`. Install its `.tgz` asset from [GitHub Releases](https://github.com/davidjoshlee/school-agent-public/releases) without cloning the repository:
 
 ```bash
 npm install --global https://github.com/davidjoshlee/school-agent-public/releases/download/v0.1.1/school-agent-0.1.1.tgz
 school-agent --help
 ```
 
-The example URL works only after `v0.1.1` is published; use the exact tag and `.tgz` asset URL shown on Releases. `v0.1.0` is available but predates the user-level config discovery in this guide. To contribute or run from source, use this path instead:
+Confirm the release and asset are available before installing; use the exact tag and `.tgz` asset URL shown on Releases. `v0.1.0` predates the user-level config discovery in this guide. To contribute or run from source, use this path instead:
 
 ```bash
 git clone https://github.com/davidjoshlee/school-agent-public.git
