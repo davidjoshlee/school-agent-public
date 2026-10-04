@@ -4,6 +4,7 @@ import { basename, dirname, extname, join, relative, sep } from "node:path"
 
 import type { SchoolConfig } from "../config/index.js"
 import { isEnoent } from "../util/errors.js"
+import { readOptional } from "../util/fs.js"
 import { buildCourseManifest } from "./manifest.js"
 import type { AssignmentPathRequest, CoursePeriodRequest, VaultDocumentKind } from "./paths.js"
 import {
@@ -126,12 +127,7 @@ export class VaultWriter {
       input.content,
     )
     const result = await this.writeOwned(path, input, content)
-    if (
-      this.#config.gitInit &&
-      (initialized || coursePrepared.created || result.kind !== "unchanged")
-    ) {
-      await this.#git.commit(`write ${basename(result.path)}`)
-    }
+    await this.commitIfChanged(initialized, coursePrepared.created, result)
     return result
   }
 
@@ -163,12 +159,7 @@ export class VaultWriter {
         content,
       ),
     )
-    if (
-      this.#config.gitInit &&
-      (initialized || coursePrepared.created || result.kind !== "unchanged")
-    ) {
-      await this.#git.commit(`write ${basename(result.path)}`)
-    }
+    await this.commitIfChanged(initialized, coursePrepared.created, result)
     return result
   }
 
@@ -197,12 +188,7 @@ export class VaultWriter {
       input.content,
     )
     const result = await this.writeGenerated(path, content)
-    if (
-      this.#config.gitInit &&
-      (initialized || coursePrepared.created || result.kind !== "unchanged")
-    ) {
-      await this.#git.commit(`write ${basename(result.path)}`)
-    }
+    await this.commitIfChanged(initialized, coursePrepared.created, result)
     return result
   }
 
@@ -228,19 +214,15 @@ export class VaultWriter {
         content,
       ),
     )
-    if (this.#config.gitInit && (initialized || result.kind !== "unchanged")) {
-      await this.#git.commit(`write ${basename(result.path)}`)
-    }
+    await this.commitIfChanged(initialized, false, result)
     return result
   }
 
   async writeMetadata(input: VaultMetadataWriteInput): Promise<VaultWriteResult> {
     const initialized = await this.initialize()
     const path = vaultPaths(this.#config.root).metadata[input.artifact]
-    if (await pathExists(iCloudStubPath(path))) {
-      this.#config.warn?.(`Skipping iCloud placeholder: ${iCloudStubPath(path)}`)
-      return { kind: "skipped", path }
-    }
+    const skipped = await this.skipICloudPlaceholder(path)
+    if (skipped !== null) return skipped
     const result = await writeTarget(
       path,
       renderVaultDocument(
@@ -257,9 +239,7 @@ export class VaultWriter {
         input.content,
       ),
     )
-    if (this.#config.gitInit && (initialized || result.kind !== "unchanged")) {
-      await this.#git.commit(`write ${basename(result.path)}`)
-    }
+    await this.commitIfChanged(initialized, false, result)
     return result
   }
 
@@ -316,10 +296,8 @@ export class VaultWriter {
     input: VaultWriteInput,
     content: string,
   ): Promise<VaultWriteResult> {
-    if (await pathExists(iCloudStubPath(path))) {
-      this.#config.warn?.(`Skipping iCloud placeholder: ${iCloudStubPath(path)}`)
-      return { kind: "skipped", path }
-    }
+    const skipped = await this.skipICloudPlaceholder(path)
+    if (skipped !== null) return skipped
     const existing = await readOptional(path)
     if (input.kind === vaultDocumentKinds.guidance && existing !== null) {
       return { kind: "unchanged", path }
@@ -334,15 +312,30 @@ export class VaultWriter {
   }
 
   private async writeGenerated(path: string, content: string): Promise<VaultWriteResult> {
-    if (await pathExists(iCloudStubPath(path))) {
-      this.#config.warn?.(`Skipping iCloud placeholder: ${iCloudStubPath(path)}`)
-      return { kind: "skipped", path }
-    }
+    const skipped = await this.skipICloudPlaceholder(path)
+    if (skipped !== null) return skipped
     const existing = await readOptional(path)
     if (existing !== null && isUserOwned(existing, path)) {
       return writeUpdate(path, content)
     }
     return writeTarget(path, content)
+  }
+
+  private async skipICloudPlaceholder(path: string): Promise<VaultWriteResult | null> {
+    const stubPath = iCloudStubPath(path)
+    if (!(await pathExists(stubPath))) return null
+    this.#config.warn?.(`Skipping iCloud placeholder: ${stubPath}`)
+    return { kind: "skipped", path }
+  }
+
+  private async commitIfChanged(
+    initialized: boolean,
+    courseCreated: boolean,
+    result: VaultWriteResult,
+  ): Promise<void> {
+    if (this.#config.gitInit && (initialized || courseCreated || result.kind !== "unchanged")) {
+      await this.#git.commit(`write ${basename(result.path)}`)
+    }
   }
 }
 
@@ -415,7 +408,9 @@ async function markdownFiles(directory: string): Promise<readonly string[]> {
     entries.map((entry) => {
       const path = join(directory, entry.name)
       if (entry.isDirectory()) return markdownFiles(path)
-      return Promise.resolve(entry.isFile() && entry.name.endsWith(".md") ? [path] : [])
+      return Promise.resolve(
+        entry.isFile() && entry.name.endsWith(vaultLayout.markdownExtension) ? [path] : [],
+      )
     }),
   )
   return nested.flat()
@@ -440,17 +435,6 @@ function courseNavigationPath(paths: CoursePaths, requested: string): string {
 
 function navigationDocumentType(path: string): string {
   return path.endsWith("00 Home.md") ? vaultLayout.home : vaultLayout.overview
-}
-
-async function readOptional(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, "utf8")
-  } catch (error: unknown) {
-    if (isEnoent(error)) {
-      return null
-    }
-    throw error
-  }
 }
 
 async function writeTarget(path: string, content: string): Promise<VaultWriteResult> {

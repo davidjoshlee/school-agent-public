@@ -51,17 +51,8 @@ export function parseDeliverableDirective(content: string): DeliverableDirective
   if (match === null || match.index === undefined) {
     return { suppressed: false, instructions: content.trim() }
   }
-  const start = match.index
-  const headingEnd = content.indexOf("\n", start)
-  const bodyStart = headingEnd === -1 ? content.length : headingEnd + 1
-  const rest = content.slice(bodyStart)
-  const end = nextHeader.exec(rest)
-  const bodyEnd = end === null || end.index === undefined ? rest.length : end.index
-  const body = rest.slice(0, bodyEnd).trim()
-  const instructions = `${content.slice(0, start)}${content.slice(bodyStart + bodyEnd)}`
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-  return { suppressed: /^none$/i.test(body), instructions }
+  const block = extractH2Block(content, match.index)
+  return { suppressed: /^none$/i.test(block.body.trim()), instructions: block.instructions }
 }
 
 export function parseStructure(content: string): ParsedStructure {
@@ -69,19 +60,26 @@ export function parseStructure(content: string): ParsedStructure {
   if (match === null || match.index === undefined) {
     return { sections: [], readingsSection: null, instructions: content.trim() }
   }
-  const start = match.index
+  const block = extractH2Block(content, match.index)
+  const sections = declaredSections(block.body)
+  const readingsSection = sections.find((name) => readingSectionName.test(name)) ?? null
+  return { sections, readingsSection, instructions: block.instructions }
+}
+
+function extractH2Block(
+  content: string,
+  start: number,
+): { readonly body: string; readonly instructions: string } {
   const headingEnd = content.indexOf("\n", start)
   const bodyStart = headingEnd === -1 ? content.length : headingEnd + 1
   const rest = content.slice(bodyStart)
   const end = nextHeader.exec(rest)
-  // The structure block spans from after the header to the next H2 heading (or EOF).
+  // H2 directives run to the next H2 heading or the end of the content.
   const bodyEnd = end === null || end.index === undefined ? rest.length : end.index
-  const sections = declaredSections(rest.slice(0, bodyEnd))
   const instructions = `${content.slice(0, start)}${content.slice(bodyStart + bodyEnd)}`
     .replace(/\n{3,}/g, "\n\n")
     .trim()
-  const readingsSection = sections.find((name) => readingSectionName.test(name)) ?? null
-  return { sections, readingsSection, instructions }
+  return { body: rest.slice(0, bodyEnd), instructions }
 }
 
 function declaredSections(block: string): readonly string[] {

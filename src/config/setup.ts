@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path"
 
 import { z } from "zod"
 
+import { hasErrorCode } from "../util/errors.js"
 import { loadConfig } from "./index.js"
 
 export const setupOptionsSchema = z.strictObject({
@@ -63,7 +64,7 @@ export function createStarterConfig(
     })
     writeFileSync(paths.environment, envTemplate, { encoding: "utf8", flag: "wx", mode: 0o600 })
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "EEXIST") {
+    if (hasErrorCode(error, "EEXIST")) {
       throw new SetupError(
         "Setup refused because a setup file already exists. Nothing was overwritten.",
       )

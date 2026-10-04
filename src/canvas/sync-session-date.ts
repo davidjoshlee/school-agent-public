@@ -41,21 +41,27 @@ export function parseSessionDate(
     const month = monthNumbers[(match[1] ?? "").toLowerCase()]
     const day = Number(match[2])
     if (month !== undefined && day >= 1 && day <= 31) {
-      candidates.add(isoDate(courseYear, month, day))
+      const candidate = isoDate(courseYear, month, day)
+      if (candidate !== undefined) candidates.add(candidate)
     }
   }
   for (const match of title.matchAll(/\b(\d{1,2})\/(\d{1,2})\b/g)) {
     const month = Number(match[1])
     const day = Number(match[2])
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      candidates.add(isoDate(courseYear, month, day))
+      const candidate = isoDate(courseYear, month, day)
+      if (candidate !== undefined) candidates.add(candidate)
     }
   }
   return candidates.size === 1 ? [...candidates][0] : undefined
 }
 
-function isoDate(year: number, month: number, day: number): string {
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+function isoDate(year: number, month: number, day: number): string | undefined {
+  const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+  const parsed = new Date(`${date}T00:00:00.000Z`)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date
+    ? date
+    : undefined
 }
 
 export type CourseYearInput = {

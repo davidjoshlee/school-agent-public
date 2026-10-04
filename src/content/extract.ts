@@ -40,9 +40,13 @@ function fileExtension(filename: string): string {
   return extension === undefined ? "" : extension.toLowerCase()
 }
 
+function normalizedContentType(input: TextExtractionInput): string {
+  return input.contentType?.split(";", 1)[0]?.toLowerCase() ?? ""
+}
+
 function fileKind(input: TextExtractionInput): FileKind {
   const extension = fileExtension(input.filename)
-  const contentType = input.contentType?.split(";", 1)[0]?.toLowerCase() ?? ""
+  const contentType = normalizedContentType(input)
   if (contentType === "application/pdf" || extension === "pdf") {
     return "pdf"
   }
@@ -81,7 +85,7 @@ function hasOleMagic(bytes: Uint8Array): boolean {
 
 function isLegacyXls(input: TextExtractionInput): boolean {
   const extension = fileExtension(input.filename)
-  const contentType = input.contentType?.split(";", 1)[0]?.toLowerCase() ?? ""
+  const contentType = normalizedContentType(input)
   return (
     extension === "xls" || contentType === "application/vnd.ms-excel" || hasOleMagic(input.bytes)
   )
