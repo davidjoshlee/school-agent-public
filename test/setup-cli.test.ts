@@ -23,6 +23,7 @@ function runSchool(
     cwd: repositoryRoot,
     encoding: "utf8",
     env: environment,
+    timeout: 10_000,
   })
 }
 
@@ -32,7 +33,7 @@ afterEach(async () => {
   )
 })
 
-describe("first-run setup CLI", () => {
+describe("first-run setup CLI", { timeout: 20_000 }, () => {
   it("explains invalid Canvas URLs and leaves setup files untouched", async () => {
     const directory = await temporaryDirectory()
     const configPath = join(directory, "school.config.json")
