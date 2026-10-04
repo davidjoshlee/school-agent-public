@@ -61,6 +61,8 @@ export type VaultWriteInput = {
   readonly status: VaultStatus
   readonly redistribution?: VaultFrontmatter["redistribution"]
   readonly model?: string
+  /** Atomic no-clobber write for unattended generation; existing target is skipped. */
+  readonly preserveExisting?: boolean
   readonly module?: {
     readonly number: number
     readonly title: string
@@ -319,6 +321,16 @@ export class VaultWriter {
     if (await pathExists(iCloudStubPath(path))) {
       this.#config.warn?.(`Skipping iCloud placeholder: ${iCloudStubPath(path)}`)
       return { kind: "skipped", path }
+    }
+    if (input.preserveExisting === true) {
+      await mkdir(dirname(path), { recursive: true })
+      try {
+        await writeFile(path, content, { encoding: "utf8", flag: "wx" })
+        return { kind: "written", path }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") return { kind: "skipped", path }
+        throw error
+      }
     }
     const existing = await readOptional(path)
     if (input.kind === vaultDocumentKinds.guidance && existing !== null) {
