@@ -150,11 +150,18 @@ export function readingText(content: string): string {
 
 /** Recheck source containment after planning, including changed ancestor links. */
 export async function assertReadingSource(path: string, root: string): Promise<void> {
+  const failure = "Source changed or escaped the vault during export; reading copy is incomplete."
+  if (!inside(path, root)) throw new Error(failure)
+  let parent = root
+  const parents = relative(root, dirname(path)).split(sep).filter(Boolean)
+  for (const part of ["", ...parents]) {
+    if (part) parent = join(parent, part)
+    const info = await lstat(parent)
+    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error(failure)
+  }
   const info = await lstat(path)
   if (!info.isFile() || info.isSymbolicLink() || !inside(await realpath(path), root)) {
-    throw new Error(
-      "Source changed or escaped the vault during export; reading copy is incomplete.",
-    )
+    throw new Error(failure)
   }
 }
 

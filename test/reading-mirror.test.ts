@@ -59,6 +59,25 @@ describe("persistent reading mirror", () => {
     expect(await readdir(join(root, "_meta"))).not.toContain("reading-mirror.json")
   })
 
+  it("refuses source parent swaps into excluded in-vault metadata", async () => {
+    const { base, root, destination } = await fixture()
+    const course = join(root, "course")
+    const privateRoot = join(root, "_meta")
+    await mkdir(course)
+    await mkdir(privateRoot)
+    await writeFile(join(course, "reading.txt"), "safe reading")
+    await writeFile(join(privateRoot, "reading.txt"), "synthetic private metadata")
+    await expect(
+      refreshReadingMirror(root, destination, (stage) => {
+        if (stage.includes("loading local")) {
+          renameSync(course, join(root, "previous-course"))
+          symlinkSync(privateRoot, course)
+        }
+      }),
+    ).rejects.toThrow("escaped the vault")
+    expect(await readdir(base)).not.toContain("drive")
+  })
+
   it("updates changed files and preserves unchanged mtimes without changing the vault", async () => {
     const { root, destination } = await fixture()
     const first = await refreshReadingMirror(root, destination)
