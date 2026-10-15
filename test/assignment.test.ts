@@ -332,6 +332,27 @@ describe("assignment engine", () => {
       // Then: it is promoted to a final artifact rather than failing "not pending_approval".
       expect(final.path).toMatch(/Final/)
       expect(await readFile(final.path, "utf8")).toContain("Complete draft.")
+      const firstBytes = await readFile(final.path)
+      const retry = await approveAssignment({
+        vaultRoot: root,
+        config: config(),
+        runner,
+        runId: draft.runId,
+      })
+      expect(retry.path).toBe(final.path)
+      await writeFile(
+        draft.path,
+        (await readFile(draft.path, "utf8")).replace("Complete draft.", "Revised complete draft."),
+      )
+      const revision = await approveAssignment({
+        vaultRoot: root,
+        config: config(),
+        runner,
+        runId: draft.runId,
+      })
+      expect(revision.path).toMatch(/\.v2\.md$/)
+      expect(await readFile(final.path)).toEqual(firstBytes)
+      expect(await readFile(revision.path, "utf8")).toContain("Revised complete draft.")
     } finally {
       index.close()
       await rm(root, { recursive: true, force: true })

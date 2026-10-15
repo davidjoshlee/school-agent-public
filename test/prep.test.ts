@@ -203,6 +203,22 @@ describe("generatePrepBrief", () => {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
       })
+      const edited = `${await readFile(result.path, "utf8")}\nSTUDENT_PREP_NOTES\n`
+      await writeFile(result.path, edited)
+      const repeated = await generatePrepBrief({
+        vaultRoot: root,
+        config: config(),
+        course,
+        period: { kind: "week", value: "2026-09-08" },
+        index,
+        runner: runner(join(root, ".agent-runs"), brief),
+        triage: { summarize: async () => "unused" },
+      })
+      expect(await readFile(result.path, "utf8")).toBe(edited)
+      expect(repeated.path).toContain("Week 01 - Sep 08/Prep/week 2026-09-08.v2.md")
+      const rerun = parseVaultDocument(await readFile(repeated.path, "utf8"))
+      expect(rerun.frontmatter.dates.period).toBe("week-2026-09-08")
+      expect(rerun.content).toBe(output.content)
     } finally {
       index.close()
       await rm(root, { recursive: true, force: true })

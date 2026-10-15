@@ -60,6 +60,43 @@ async function sourceFiles(directory: string): Promise<readonly string[]> {
 }
 
 describe("VaultWriter", () => {
+  it.each([vaultDocumentKinds.prep, vaultDocumentKinds.final])(
+    "preserves %s artifacts and unmarked edits, reusing exact retries",
+    async (kind) => {
+      const root = await temporaryVault()
+      const writer = new VaultWriter({ root, gitInit: false })
+      const input = {
+        course,
+        kind,
+        title: "Weekly analysis",
+        canvasId: "analysis-1",
+        canvasUrl: course.canvasUrl,
+        content: "First completed analysis.\n",
+        source: vaultSources.agent,
+        status: vaultStatuses.final,
+        period: { kind: "week" as const, number: 2, date: "2026-09-28" },
+      }
+      const first = await writer.write(input)
+      const original = await readFile(first.path, "utf8")
+      await writeFile(first.path, `${original}\nSTUDENT_EDIT\n`)
+      const edited = await readFile(first.path)
+      const changed = { ...input, content: "Second completed analysis.\n" }
+      const second = await writer.write(changed)
+      const secondBytes = await readFile(second.path)
+      const secondTime = (await stat(second.path)).mtimeMs
+      const retry = await writer.write(changed)
+      expect(second).toEqual({ kind: "versioned", path: versionedPath(first.path, 2) })
+      expect(retry).toEqual({ kind: "unchanged", path: second.path })
+      expect(await readFile(first.path)).toEqual(edited)
+      expect(await readFile(second.path)).toEqual(secondBytes)
+      expect((await stat(second.path)).mtimeMs).toBe(secondTime)
+      expect(parseVaultDocument(secondBytes.toString()).frontmatter.dates).toEqual({})
+      expect(
+        second.path.startsWith(`${coursePaths(root, course.code, course.canvasId).root}/`),
+      ).toBe(true)
+    },
+  )
+
   it("keeps duplicate human-readable titles distinct without exposing Canvas ids", async () => {
     // Given: Canvas modules whose display names and positions collide.
     const root = await temporaryVault()

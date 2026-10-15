@@ -302,6 +302,9 @@ export class VaultWriter {
     if (input.kind === vaultDocumentKinds.guidance && existing !== null) {
       return { kind: "unchanged", path }
     }
+    if (input.kind === vaultDocumentKinds.prep || input.kind === vaultDocumentKinds.final) {
+      return writePreservedVersion(path, content)
+    }
     if (existing !== null && input.kind === vaultDocumentKinds.draft && isPending(existing, path)) {
       return writeVersion(path, content)
     }
@@ -454,6 +457,28 @@ async function writeVersion(path: string, content: string): Promise<VaultWriteRe
   return {
     kind: (await writeIfChanged(versioned, content)) ? "versioned" : "unchanged",
     path: versioned,
+  }
+}
+
+/** Prep and approved work are durable artifacts, including unmarked hand edits. */
+async function writePreservedVersion(path: string, content: string): Promise<VaultWriteResult> {
+  await mkdir(dirname(path), { recursive: true })
+  let version = 1
+  while (true) {
+    const candidate = version === 1 ? path : versionedPath(path, version)
+    const existing = await readOptional(candidate)
+    if (existing === content) return { kind: "unchanged", path: candidate }
+    if (existing === null && !(await pathExists(iCloudStubPath(candidate)))) {
+      try {
+        await writeFile(candidate, content, { encoding: "utf8", flag: "wx" })
+        return { kind: version === 1 ? "written" : "versioned", path: candidate }
+      } catch (error: unknown) {
+        if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error
+        // Another writer claimed this name. Reinspect rather than overwrite it.
+        continue
+      }
+    }
+    version += 1
   }
 }
 

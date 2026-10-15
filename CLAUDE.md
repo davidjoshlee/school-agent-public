@@ -21,6 +21,7 @@ Default setup creates `~/school-vault`, an empty explicit course allowlist, `git
 - Vault paths derive from `src/store/paths.ts`; do not duplicate layout strings.
 - Retrieval uses manifests and summary sidecars before selected full text. Record selected model context locally.
 - Draft approval is durable local state. User guidance is never overwritten; revisions create versions.
+- Prep and approved Finals preserve earlier files, including unmarked edits, using numbered siblings for changed output. Exact-byte retries reuse an existing version; the returned path identifies the saved artifact.
 - Model IDs belong in `config/models.default.json` and user config overrides, not source files.
 - Cost preflight happens before model calls, but cannot promise an absolute billing ceiling for a request already in progress. Reconcile eligible recorded costs with the provider when possible.
 

@@ -58,6 +58,10 @@ Never invent credentials, a schedule, or a completed acceptance run.
   submission. AI-policy metadata is neither permission nor enforcement.
 - Inspect: `vault health`, `vault reconcile-index`, `cost`, and provenance records.
   Review migration dry runs and exact paths before applying any repairs.
+- Prep reruns and changed approvals preserve earlier artifacts as `.v2.md`,
+  `.v3.md`, etc., including hand edits without ownership markers. Exact-byte
+  retries reuse the matching version. Open the returned path, not an assumed
+  original filename; older versions are not deleted or restored automatically.
 - Obsidian: `vault obsidian` previews the existing folder; `--apply` creates a
   guide without moving originals or configuring sync.
 - Google Drive/iPhone reading: `vault reading-copy --destination <folder>` previews;
